@@ -24,25 +24,7 @@ hs_err_pid*
 # MacOS
 *.DS_Store
 
-Skip to content
-This repository
-Search
-Pull requests
-Issues
-Marketplace
-Explore
- @joao-conde
- Sign out
-2,439
-62,080 28,187 github/gitignore
- Code  Pull requests 174  Projects 0  Insights
-gitignore/Global/Eclipse.gitignore
-ade08ba  on Dec 26, 2017
-@rafiw rafiw Update Eclipse.gitignore (#2556)
-@sherzodv @tyutyutyu @shiftkey @aroben @Utumno @sveyret @segfly @drasolka @rlee287 @rafiw @raeglan @mimibar @fhemberger @leandrodeleite @jcarsique @harshadsabne @gAmUssA @DenisGorbachev @pangratz @defunkt @arinto @apetresc @alexkaratarakis
-    
-54 lines (39 sloc)  714 Bytes
-
+#Eclipse
 .metadata
 bin/
 tmp/
