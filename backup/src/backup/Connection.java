@@ -6,79 +6,78 @@ import java.net.MulticastSocket;
 
 public class Connection {
 	
-	private MulticastSocket MC;
-	private MulticastSocket MDB;
-	private MulticastSocket MDR;
+	private MulticastChannel MC;
+	private MulticastChannel MDB;
+	private MulticastChannel MDR;
 	
-	private String mcAddress;
-	private int mcPort;
-	
+	public static class MulticastChannel {
+		
+		private int port;
+		private InetAddress multicastAddress;
+		private MulticastSocket multicastSocket;
+		
+		
+		public MulticastChannel(int port, String multicastAddress) {
+			
+			try {
+				
+				this.port = port;
+				this.multicastAddress = InetAddress.getByName(multicastAddress);
+				this.multicastSocket = new MulticastSocket(this.port);
+				this.multicastSocket.joinGroup(this.multicastAddress);
+				
+			}
+			
+			catch(IOException e) {
+				e.printStackTrace();
+			}
+			
+		}
+
+
+		public int getPort() {
+			return port;
+		}
+
+
+		public InetAddress getMulticastAddress() {
+			return multicastAddress;
+		}
+
+
+		public MulticastSocket getMulticastSocket() {
+			return multicastSocket;
+		}
+		
+		
+		
+		
+	}
+		
 	public Connection(String mcAddress, int mcPort, String mdbAddress, int mdbPort, String mdrAddress, int mdrPort) {
 		
 		
-		this.mcAddress = mcAddress;
-		this.mcPort = mcPort;
+		this.MC = new MulticastChannel(mcPort, mcAddress);
+		this.MDB = new MulticastChannel(mdbPort, mdbAddress);
+		this.MDR = new MulticastChannel(mdrPort, mdrAddress);
 		
-		try {
-			
-			
-			
-			this.MC = new MulticastSocket(mcPort);
-			System.out.println(this.MC.getLocalPort());
-			this.MDB = new MulticastSocket(mdbPort);
-			this.MDR = new MulticastSocket(mdrPort);
-			
-			this.MC.joinGroup(InetAddress.getByName(mcAddress));
-			this.MDB.joinGroup(InetAddress.getByName(mdbAddress));
-			this.MDR.joinGroup(InetAddress.getByName(mdrAddress));
-			
-			System.out.println(this.MC.getPort());
-			System.out.println(this.MC.getRemoteSocketAddress());
-			System.out.println(this.MC.getLocalSocketAddress());
-			
-			System.out.println(InetAddress.getByName(mcAddress));
-			
-			System.out.println(mcAddress);
-			System.out.println(mcPort);
-
-
-			
-		
-		} catch (IOException e) {
-			
-			e.printStackTrace();
-		}		
 	}
 
-	public MulticastSocket getMC() {
-		return this.MC;
-	}
-	
-	
-
-	public String getMcAddress() {
-		return mcAddress;
+	public MulticastChannel getMC() {
+		return MC;
 	}
 
-	public void setMcAddress(String mcAddress) {
-		this.mcAddress = mcAddress;
-	}
-
-	public int getMcPort() {
-		return mcPort;
-	}
-
-	public void setMcPort(int mcPort) {
-		this.mcPort = mcPort;
-	}
-
-	public MulticastSocket getMDB() {
+	public MulticastChannel getMDB() {
 		return MDB;
 	}
 
-	public MulticastSocket getMDR() {
+	public MulticastChannel getMDR() {
 		return MDR;
 	}
+	
+	
+
+	
 	
 	
 	
