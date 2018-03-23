@@ -1,14 +1,14 @@
 package backup;
 
 import java.io.ByteArrayInputStream;
-import java.io.InputStream;
 import java.util.Scanner;
 
 public class Message {
 	
 	private final static byte CR = 0xD;
 	private final static byte LF = 0xA;
-
+	private final static String CRLF = new String(new byte[] {CR,LF});
+			
 	public static enum MessageType {
 		
 		PUTCHUNK("PUTCHUNK"),
@@ -18,6 +18,14 @@ public class Message {
 		
 		private MessageType(String text) {
 			this.text = text;
+		}
+		
+		public MessageType getType(String text) {
+			
+			if(text.equals(this.text))
+				return this;
+			return null;
+			
 		}
 		
 	}
@@ -126,7 +134,14 @@ public class Message {
 		Scanner scanner = new Scanner(new ByteArrayInputStream(message));
 		
 		
-		//TODO process message
+		while(!scanner.hasNext(CRLF + " *" + CRLF)) {
+			
+			//MessageType messageType = MessageType. scanner.next()
+			
+			
+			
+			
+		}
 		
 		
 		scanner.close();
