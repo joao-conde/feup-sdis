@@ -37,6 +37,8 @@ local.properties
 .loadpath
 .recommenders
 
+.classpath-atom
+
 # External tool builders
 .externalToolBuilders/
 
