@@ -15,6 +15,7 @@ import backup.Message.ReplicationDegreeOutOfLimitsException;
 public class Peer {
 
 	public static float BACKUP_PROTOCOL_VERSION = 1.0f;
+	public final static int CHUNK_MAX_SIZE = 64000;
 
 	public int id;
 	private Connection connection;
@@ -120,19 +121,19 @@ public class Peer {
 
 	public class MessageHandler implements Runnable {
 
-		private byte[] buffer;
+		private Message message;
 
-		public MessageHandler(byte[] buffer) {
-			this.buffer = buffer;
+		public MessageHandler(Message message) {
+			this.message = message;
 		}
 
 
 		@Override
 		public void run() {
 
-			System.out.println("Olá a partir da thread do peer " + id + "\nI received the message: " + new String(buffer));
-			Message msg = Message.processMessage(buffer);
-			switch(msg.getMessageFields().messageType){
+			System.out.println("I received the message: " + new String(message.getMessage()));
+			
+			switch(message.getMessageFields().messageType){
 
 				case PUTCHUNK:
 					//saveChunk(Message.processMessage(buffer));
@@ -173,10 +174,12 @@ public class Peer {
 					DatagramPacket receivingPacket = new DatagramPacket(buffer, buffer.length);
 					this.multicastSocket.receive(receivingPacket);
 
-					//get chunk sender ID test with self id and discrd if equals
-					//System.out.println(receivingPacket);
+					Message messageReceived = Message.processMessage(buffer);
+					
+					if(id == messageReceived.getMessageFields().senderId)
+						continue;
 
-					Runnable handler = new MessageHandler(buffer);
+					Runnable handler = new MessageHandler(messageReceived);
 
 					threadPool.execute(handler);
 

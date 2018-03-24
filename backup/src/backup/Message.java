@@ -10,7 +10,7 @@ public class Message {
 	public final static byte CR = 0xD;
 	public final static byte LF = 0xA;
 	public final static String CRLF = new String(new byte[] {CR,LF});
-	public final static int CHUNK_MAX_SIZE = 64; 
+	 
 			
 	public static enum MessageType {
 		
@@ -94,13 +94,31 @@ public class Message {
 			this.chunkNo = chunkNo;
 			this.replicationDegree = replicationDegree;
 		}
+		
+		public MessageFields(MessageType messageType, float protocolVersion, int senderId, String fileId, int chunkNo) {
+			this.messageType = messageType;
+			this.protocolVersion = protocolVersion;
+			this.senderId = senderId;
+			this.fileId = fileId;
+			this.chunkNo = chunkNo;
+			this.replicationDegree = -1;
+		}
+		
+		public MessageFields(MessageType messageType, float protocolVersion, int senderId, String fileId) {
+			this.messageType = messageType;
+			this.protocolVersion = protocolVersion;
+			this.senderId = senderId;
+			this.fileId = fileId;
+			this.chunkNo = -1;
+			this.replicationDegree = -1;
+		}
 
 	}
 
 
 	private byte[] message;
 	private MessageFields messageFields;
-	private byte[] chunk = new byte[Message.CHUNK_MAX_SIZE];
+	private byte[] chunk = new byte[Peer.CHUNK_MAX_SIZE];
 	
 
 	private Message(MessageFields messageFields, byte[] chunk) {
@@ -117,40 +135,56 @@ public class Message {
 
 		Message result = new Message(messageFields, chunk);
 
-		if(messageFields.replicationDegree < 1 || messageFields.replicationDegree > 9)
-			throw new ReplicationDegreeOutOfLimitsException();
-
-		if(messageFields.chunkNo < 0 || messageFields.chunkNo > 1000000)
-			throw new ChunkNoException();
-
+	
 		String headerString = messageFields.messageType.text + " " + messageFields.protocolVersion + " " + messageFields.senderId + " " + messageFields.fileId;
-
-		switch (messageFields.messageType) {
-
-			case PUTCHUNK:
-
-				headerString += (" " + messageFields.chunkNo + " " + messageFields.replicationDegree);
-
-				byte[] header = headerString.getBytes();
-
-				byte[] finalHeader = new byte[header.length + 2];
-
-				System.arraycopy(header, 0, finalHeader, 0, header.length);
-				finalHeader[finalHeader.length-2] = CR;
-				finalHeader[finalHeader.length-1] = LF;
-
-				result.message = new byte[finalHeader.length + chunk.length];
-				System.arraycopy(finalHeader, 0, result.message, 0, finalHeader.length);
-				System.arraycopy(chunk, 0, result.message, header.length, chunk.length);
-
-				break;
-
-			default:
-				break;
+		
+		
+		if(messageFields.messageType != MessageType.DELETE) {
+			
+			if(messageFields.chunkNo < 0 || messageFields.chunkNo > 1000000)
+				throw new ChunkNoException();
+			
+			headerString += (" " + messageFields.chunkNo);
+			
+			if(messageFields.messageType == MessageType.PUTCHUNK) {
+				
+				if(messageFields.replicationDegree < 1 || messageFields.replicationDegree > 9)
+					throw new ReplicationDegreeOutOfLimitsException();
+				
+				headerString += (" " + messageFields.replicationDegree);
+				
+			}
+				
 		}
-
+		
+		headerString += (" " + CRLF + CRLF); 
+		
+		byte[] header = headerString.getBytes();
+		
+		if(messageFields.messageType == MessageType.PUTCHUNK || messageFields.messageType == MessageType.CHUNK) {
+			
+			result.message = new byte[header.length + chunk.length];
+			System.arraycopy(header, 0, result.message, 0, header.length);
+			System.arraycopy(chunk, 0, result.message, header.length, chunk.length);
+			
+		}
+		
+		else {
+			
+			result.message = new byte[header.length];
+			System.arraycopy(header, 0, result.message, 0, header.length);
+			
+		}
+		
+		
 		return result;
 
+	}
+	
+	public static Message buildMessage(MessageFields messageFields) throws ReplicationDegreeOutOfLimitsException, ChunkNoException {
+		
+		return buildMessage(messageFields,null);
+				
 	}
 
 	public static Message processMessage(byte[] message) {
