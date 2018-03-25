@@ -63,7 +63,7 @@ public class Peer {
 
 		try {
 
-			Message message = Message.buildMessage(new Message.MessageFields(MessageType.PUTCHUNK, BACKUP_PROTOCOL_VERSION, this.id, "FileId", 1, 2), new byte[] {0x1,0xb});
+			Message message = Message.buildMessage(new Message.MessageFields(MessageType.PUTCHUNK, BACKUP_PROTOCOL_VERSION, this.id, "FileId", 1, 2), "Test string".getBytes());
 
 			DatagramPacket packetToSend = new DatagramPacket(message.getMessage(), message.getMessage().length,
 					this.connection.getMDB().getMulticastAddress(),
@@ -89,17 +89,15 @@ public class Peer {
 
 
 	public void saveChunk(Message msg){
-		System.out.println("Save chunk");
 
 		try {
-			FileOutputStream stream = new FileOutputStream("chunk" + msg.getMessageFields().chunkNo);
+			FileOutputStream stream = new FileOutputStream("file" + msg.getMessageFields().fileId + "-chunk" + msg.getMessageFields().chunkNo);
 		    stream.write(msg.getChunk());
 		    stream.close();
 		}catch(Exception e){
 			e.printStackTrace();
 		}
 
-		System.out.println("Chunk saved");
 	}
 
 
@@ -132,19 +130,17 @@ public class Peer {
 		public void run() {
 
 			System.out.println("I received the message: " + new String(message.getMessage()));
-			
+
 			switch(message.getMessageFields().messageType){
 
 				case PUTCHUNK:
-					//saveChunk(Message.processMessage(buffer));
+					saveChunk(message);
 					break;
 				case STORED:
 					break;
 			default:
 				break;
 			}
-
-
 
 		}
 
@@ -175,7 +171,7 @@ public class Peer {
 					this.multicastSocket.receive(receivingPacket);
 
 					Message messageReceived = Message.processMessage(buffer);
-					
+
 					if(id == messageReceived.getMessageFields().senderId)
 						continue;
 
