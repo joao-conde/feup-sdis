@@ -1,6 +1,7 @@
 package backup;
 
 import java.io.IOException;
+import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
 
@@ -15,12 +16,14 @@ public class Connection {
 		private int port;
 		private InetAddress multicastAddress;
 		private MulticastSocket multicastSocket;
+		private String name;
 		
 		
-		public MulticastChannel(int port, String multicastAddress) {
+		public MulticastChannel(int port, String multicastAddress, String name) {
 			
 			try {
 				
+				this.name = name;
 				this.port = port;
 				this.multicastAddress = InetAddress.getByName(multicastAddress);
 				this.multicastSocket = new MulticastSocket(this.port);
@@ -51,15 +54,45 @@ public class Connection {
 		
 		
 		
+		public String getName() {
+			return name;
+		}
+
+
+		public void sendMessage(Message message) {
+			
+			try {
+				DatagramPacket messageBuffer = new DatagramPacket(message.getMessage(), message.getMessage().length, this.multicastAddress, this.port);
+				this.multicastSocket.send(messageBuffer);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+			
+		}
+		
+		public void receiveMessage(byte[] buffer) {
+			
+			DatagramPacket receivingPacket = new DatagramPacket(buffer, buffer.length);
+			try {
+				this.multicastSocket.receive(receivingPacket);
+				
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		}
+		
 		
 	}
 		
 	public Connection(String mcAddress, int mcPort, String mdbAddress, int mdbPort, String mdrAddress, int mdrPort) {
 		
 		
-		this.MC = new MulticastChannel(mcPort, mcAddress);
-		this.MDB = new MulticastChannel(mdbPort, mdbAddress);
-		this.MDR = new MulticastChannel(mdrPort, mdrAddress);
+		this.MC = new MulticastChannel(mcPort, mcAddress, "Control Channel");
+		this.MDB = new MulticastChannel(mdbPort, mdbAddress, "Data Backup Channel");
+		this.MDR = new MulticastChannel(mdrPort, mdrAddress, "Data Re");
 		
 	}
 
