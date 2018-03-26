@@ -67,9 +67,10 @@ public class Peer {
 
 		try {
 
-			Message message = Message.buildMessage(new Message.MessageFields(MessageType.PUTCHUNK, BACKUP_PROTOCOL_VERSION, this.id, "FileId", 1, 2), new byte[] {0x1,0xb});
+			Message message = Message.buildMessage(new Message.MessageFields(MessageType.PUTCHUNK, BACKUP_PROTOCOL_VERSION, this.id, "FileId", 1, 2), "Test String".getBytes());
 			this.connection.getMDB().sendMessage(message);
 			
+
 		}
 
 
@@ -85,17 +86,15 @@ public class Peer {
 
 
 	public void saveChunk(Message msg){
-		System.out.println("Save chunk");
 
 		try {
-			FileOutputStream stream = new FileOutputStream("chunk" + msg.getMessageFields().chunkNo);
+			FileOutputStream stream = new FileOutputStream("file" + msg.getMessageFields().fileId + "-chunk" + msg.getMessageFields().chunkNo);
 		    stream.write(msg.getChunk());
 		    stream.close();
 		}catch(Exception e){
 			e.printStackTrace();
 		}
 
-		System.out.println("Chunk saved");
 	}
 
 
@@ -141,7 +140,7 @@ public class Peer {
 
 		@Override
 		public void run() {
-			
+
 			this.message = Message.processMessage(this.buffer);
 			
 			if(id == this.message.getMessageFields().senderId)
@@ -165,14 +164,13 @@ public class Peer {
 					
 					this.sendStoredMessage(this.message.getMessageFields().fileId, this.message.getMessageFields().chunkNo);
 					
+
 					break;
 				case STORED:
 					break;
 			default:
 				break;
 			}
-
-
 
 		}
 
