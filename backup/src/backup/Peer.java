@@ -1,5 +1,6 @@
 package backup;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -144,6 +145,11 @@ public class Peer {
 
 			peer.backup("../res/pic.jpg", Integer.parseInt(args[1]));
 
+		}
+
+		if (peer.id == 3){
+			File file = new File("../res/pic.jpg");
+			peer.mergeChunks("mergefile", peer.chunkFile(file));
 		}
 
 	}
@@ -490,16 +496,37 @@ public class Peer {
 			e.printStackTrace();
 		}
 		
-		
-		
-//		
-		
-		
-		
-		
-		
+
 	}
 	
+
+	public File mergeChunks(String filePath, ArrayList<byte[]> chunks){
+		
+		File file = new File(filePath);
+
+		ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
+		
+		for(byte[] chunk: chunks){
+			try {
+				outputStream.write(chunk);
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		byte[] fileBytes = outputStream.toByteArray();
+		
+		try {
+			FileOutputStream fileOutputStream = new FileOutputStream(file.getName());
+			fileOutputStream.write(fileBytes);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return file;
+	}
 	
 	
 }
