@@ -59,23 +59,21 @@ public class Peer {
 		public String chunkId;
 		public String fileId;
 		
-		public ChunkInfo(int desiredReplicationDegree,int chunkNo, String fileId) {
-			this(desiredReplicationDegree, chunkNo, fileId, new int[] {});
-		}
-		
-		public ChunkInfo(int desiredReplicationDegree,int chunkNo, String fileId, int[] seeds) {			
-			this(desiredReplicationDegree, buildChunkId(chunkNo, fileId), seeds);
-		}
 
-		public ChunkInfo(int desiredReplicationDegree, String chunkId, int[] seeds) {
+		public ChunkInfo(int desiredReplicationDegree,int chunkNo, String fileId){
+			this(desiredReplicationDegree, chunkNo, fileId, new int[]{});
+		}
+		public ChunkInfo(int desiredReplicationDegree,int chunkNo, String fileId, int[] seeds) {			
 			this.desiredReplicationDegree = desiredReplicationDegree;
-			this.chunkId = chunkId;
+			this.chunkId = buildChunkId(chunkNo, fileId);
+			this.fileId = fileId;
 			
 			for(int i : seeds) {
 				this.addPeer(new Integer(i));
 			}
-				
 		}
+
+
 		
 		public void addPeer(int peerId) {
 			
@@ -541,7 +539,7 @@ public class Peer {
 			
 			
 			while(scanner.hasNext()){
-				String chunkId = scanner.next().trim();
+				int chunkNo = scanner.nextInt();
 
 				ArrayList<Integer> seeds = new ArrayList<>(); 
 
@@ -552,9 +550,9 @@ public class Peer {
 				int desiredRepDeg = Integer.parseInt(scanner.next().trim());
 				String fileId = scanner.next().trim();
 
-				ChunkInfo chunkInfo = new ChunkInfo(desiredRepDeg, chunkId, seeds.stream().mapToInt(i -> i).toArray());
+				ChunkInfo chunkInfo = new ChunkInfo(desiredRepDeg, chunkNo, fileId, seeds.stream().mapToInt(i -> i).toArray());
 			
-				this.chunkMap.put(chunkId, chunkInfo);
+				this.chunkMap.put(chunkInfo.chunkId, chunkInfo);
 			}
 			
             scanner.close();
