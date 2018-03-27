@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
+import java.util.Scanner;
 
 import backup.Connection.MulticastChannel;
 import backup.Message.ChunkNoException;
@@ -62,15 +63,18 @@ public class Peer {
 			this(desiredReplicationDegree, chunkNo, fileId, new int[] {});
 		}
 		
-		public ChunkInfo(int desiredReplicationDegree,int chunkNo, String fileId, int[] seeds) {
+		public ChunkInfo(int desiredReplicationDegree,int chunkNo, String fileId, int[] seeds) {			
+			this(desiredReplicationDegree, buildChunkId(chunkNo, fileId), seeds);
+		}
+
+		public ChunkInfo(int desiredReplicationDegree, String chunkId, int[] seeds) {
 			this.desiredReplicationDegree = desiredReplicationDegree;
-			this.chunkId = buildChunkId(chunkNo, fileId);
+			this.chunkId = chunkId;
 			
 			for(int i : seeds) {
 				this.addPeer(new Integer(i));
 			}
-			
-			
+				
 		}
 		
 		public void addPeer(int peerId) {
@@ -527,6 +531,38 @@ public class Peer {
 
 		return file;
 	}
-	
+
+
+	public void loadChunksTable(){
+
+		try {
+            Scanner scanner = new Scanner(new File("../res/state"));
+            scanner.useDelimiter(";");
+			
+			
+			while(scanner.hasNext()){
+				String chunkId = scanner.next().trim();
+
+				ArrayList<Integer> seeds = new ArrayList<>(); 
+
+				while(scanner.hasNextInt()){
+					seeds.add(scanner.nextInt());
+				}
+
+				int desiredRepDeg = Integer.parseInt(scanner.next().trim());
+				String fileId = scanner.next().trim();
+
+				ChunkInfo chunkInfo = new ChunkInfo(desiredRepDeg, chunkId, seeds.stream().mapToInt(i -> i).toArray());
+			
+				this.chunkMap.put(chunkId, chunkInfo);
+			}
+			
+            scanner.close();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}	
 	
 }
