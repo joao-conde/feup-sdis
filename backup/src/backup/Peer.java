@@ -1,9 +1,23 @@
 package backup;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Random;
 
 import backup.Connection.MulticastChannel;
@@ -16,7 +30,11 @@ public class Peer {
 
 	public static float BACKUP_PROTOCOL_VERSION = 1.0f;
 	public final static int CHUNK_MAX_SIZE = 64000;
-	public final static int INITIAL_PUTCHUNK_WAIT_TIME = 400;
+	public final static int MESSAGE_MAX_SIZE = CHUNK_MAX_SIZE + 150;
+	public final static int STORED_WAIT_TIME = 400;
+	public final static int PUT_CHUNK_MAX_TIMES = 5;
+	public final static int INITIAL_PUT_CHUNK_WAIT_TIME = 1000;
+	public final static String HASH_ALGORITHM = "SHA-256";
 
 	public int id;
 	private Connection connection;
@@ -24,29 +42,117 @@ public class Peer {
 	private Dispatcher mdbDispatcher;
 	private Dispatcher mdrDispatcher;
 	private Random randomGenerator = new Random(System.currentTimeMillis());
+	private HashMap<String,ChunkInfo> chunkMap = new HashMap<>();
 	
-	private int putchunkConter = 0;
+	private String pathToPeer;
+	private String pathToPeerChunks;
+	
 
-
-
+	public static class ChunkInfo {
+		
+		private int replicationDegree = 0;
+		public HashSet<Integer> seeds = new HashSet<>();
+		public int desiredReplicationDegree;
+		//public boolean saved;
+		public String chunkId;
+		public String fileId;
+		
+		public ChunkInfo(int desiredReplicationDegree,int chunkNo, String fileId) {
+			this(desiredReplicationDegree, chunkNo, fileId, new int[] {});
+		}
+		
+		public ChunkInfo(int desiredReplicationDegree,int chunkNo, String fileId, int[] seeds) {
+			this.desiredReplicationDegree = desiredReplicationDegree;
+			this.chunkId = buildChunkId(chunkNo, fileId);
+			
+			for(int i : seeds) {
+				this.addPeer(new Integer(i));
+			}
+			
+			
+		}
+		
+		public void addPeer(int peerId) {
+			
+			if(this.seeds.add(new Integer(peerId)))
+				this.replicationDegree++;
+			
+			
+		}
+		
+		public static String buildChunkId(int chunkNo, String fileId) {
+			
+			return fileId + "-" + chunkNo;
+			
+		}
+		
+		public static int getChunkNo(String chunkId) {
+			
+			String[] components = chunkId.split("-");
+			return Integer.parseInt(components[1]);
+			
+			
+		}
+		
+		public static String getFileId(String chunkId) {
+			
+			String[] components = chunkId.split("-");
+			return components[0];
+			
+		}
+		
+	}
+	
+	public static String hashString(String originalString) {
+		
+		String fileId = "";
+		
+		byte[] fileDigested = null;
+		
+		try {
+			
+			MessageDigest messageDigest = MessageDigest.getInstance(HASH_ALGORITHM);
+			fileDigested = messageDigest.digest(originalString.getBytes(StandardCharsets.UTF_8));
+			
+			for(byte b: fileDigested) {
+					
+				String current = Integer.toHexString(b & 0xff);
+				
+				String append = current.length() < 2 ? "0" + current : current;
+				
+				fileId += append;
+				
+			}
+		
+			
+		} catch (NoSuchAlgorithmException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		return fileId;
+		
+	}
+	
 	public static void main(String[] args) {
 
-		System.setProperty("java.net.preferIPv4Stack" , "true");
+		System.setProperty("java.net.preferIPv4Stack", "true");
 
 		Peer peer = new Peer(Integer.parseInt(args[0]));
 
-		if(peer.id > 1) {
+		if (peer.id > 1) {
 
-			peer.putChunk();
+			peer.backup("../res/pic.jpg", Integer.parseInt(args[1]));
 
 		}
-
 
 	}
 
 	public Peer(int id) {
 
 		this.id = id;
+		
+		
 
 		connection = new Connection("224.0.0.1", 2300, "224.0.0.2", 2301, "224.0.0.3", 2302);
 		mcDispatcher = new Dispatcher(connection.getMC());
@@ -59,57 +165,194 @@ public class Peer {
 		mcDispatcherThread.start();
 		mdbDispatcherThread.start();
 		mdrDispatcherThread.start();
-
+		
+		this.pathToPeer = "../res/peer-" + id;
+		this.pathToPeerChunks = pathToPeer + "/chunks";
+		
+		new File(this.pathToPeerChunks).mkdirs();
+		
+		
 
 	}
 
-	public void putChunk() {
+	private void stored(Message putChunkMessage) {
 
+		saveChunk(putChunkMessage);
+		
 		try {
+			Message reply = Message.buildMessage(
+					new MessageFields(MessageType.STORED, BACKUP_PROTOCOL_VERSION, id, putChunkMessage.getMessageFields().fileId, putChunkMessage.getMessageFields().chunkNo));
+			Peer.this.connection.getMC().sendMessage(reply);
+		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 
-			Message message = Message.buildMessage(new Message.MessageFields(MessageType.PUTCHUNK, BACKUP_PROTOCOL_VERSION, this.id, "FileId", 1, 2), "Test String".getBytes());
-			this.connection.getMDB().sendMessage(message);
+	}
+	
+	private void registerChunk(Message message) {
+		
+		String chunkId = ChunkInfo.buildChunkId(message.getMessageFields().chunkNo, message.getMessageFields().fileId);
+		
+		ChunkInfo chunkInfo = chunkMap.get(chunkId);
+		
+		if(chunkInfo == null) {
 			
+			if(message.getMessageFields().messageType == MessageType.PUTCHUNK)
+				chunkInfo = new ChunkInfo(message.getMessageFields().replicationDegree, message.getMessageFields().chunkNo, message.getMessageFields().fileId);
+			
+			else if(message.getMessageFields().messageType == MessageType.STORED)
+				chunkInfo = new ChunkInfo(message.getMessageFields().replicationDegree, message.getMessageFields().chunkNo, message.getMessageFields().fileId, new int[] {message.getMessageFields().senderId});
+
+			chunkMap.put(chunkId, chunkInfo);
+		}
+		else
+			chunkInfo.addPeer(message.getMessageFields().senderId);
+		
+	}
+	
+	public void putChunk(String fileId, byte[] chunk, int chunkNo, int desiredReplicationDegree) {
+
+		class PutChunk implements Runnable {
+
+			Message message;
+			private int waitingTime = Peer.INITIAL_PUT_CHUNK_WAIT_TIME;
+			ChunkInfo chunkInfo;
+
+
+			public PutChunk(int desiredReplicationDegree) {
+				
+				chunkInfo = chunkMap.get(ChunkInfo.buildChunkId(chunkNo, fileId));
+				
+				if(chunkInfo == null) {
+					chunkInfo = new ChunkInfo(desiredReplicationDegree, chunkNo, fileId);
+					chunkMap.put(chunkInfo.chunkId, chunkInfo);
+				}
+				
+				else {
+					chunkInfo.desiredReplicationDegree = desiredReplicationDegree;
+				}
+				
+			}
+
+			@Override
+			public void run() {
+				
+				int counter = 0;
+				
+				try {
+					this.message = Message.buildMessage(new Message.MessageFields(MessageType.PUTCHUNK,
+							BACKUP_PROTOCOL_VERSION, Peer.this.id, fileId, chunkNo, desiredReplicationDegree), chunk);
+										
+					while (chunkInfo.replicationDegree < chunkInfo.desiredReplicationDegree
+							&& counter < Peer.PUT_CHUNK_MAX_TIMES) {
+						
+						Peer.this.connection.getMDB().sendMessage(message);
+						
+						System.out.println("Attempt " + counter + "\n");
+
+						try {
+							Thread.sleep(waitingTime);
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+
+						this.waitingTime *= 2;
+						counter++;
+
+					}
+					
+					
+				} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
+					e.printStackTrace();
+				}
+				
+
+			}
 
 		}
-
-
-		catch (ReplicationDegreeOutOfLimitsException e) {
-			e.printStackTrace();
-		}
-
-		catch (ChunkNoException e) {
-			e.printStackTrace();
-		}
+		
+		Thread putChunk = new Thread(new PutChunk(desiredReplicationDegree));
+		putChunk.start();
+		
 
 	}
 
+	public void saveChunk(Message msg) {
 
-	public void saveChunk(Message msg){
-
-		try {
-			FileOutputStream stream = new FileOutputStream("file" + msg.getMessageFields().fileId + "-chunk" + msg.getMessageFields().chunkNo);
-		    stream.write(msg.getChunk());
-		    stream.close();
-		}catch(Exception e){
-			e.printStackTrace();
+		String chunkId = ChunkInfo.buildChunkId(msg.getMessageFields().chunkNo, msg.getMessageFields().fileId);
+		
+		ChunkInfo chunkInfo = chunkMap.get(chunkId);
+		
+		Boolean save = true;
+		
+		if(chunkInfo != null) {
+			if(chunkInfo.replicationDegree >= chunkInfo.desiredReplicationDegree)
+				save = false;
 		}
-
+		
+		if(save) {
+			
+			try {
+				FileOutputStream stream = new FileOutputStream(
+						this.pathToPeerChunks + "/" + ChunkInfo.buildChunkId(msg.getMessageFields().chunkNo, msg.getMessageFields().fileId));
+				stream.write(msg.getChunk());
+				stream.close();
+				
+				registerChunk(msg);
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		
+		}
+		
 	}
 
-
-	public ArrayList<byte[]> chunkFile(byte[] msg){
+	public ArrayList<byte[]> chunkFile(File file) {
+		
+		
+		FileInputStream inputStream;
 		ArrayList<byte[]> chunks = new ArrayList<byte[]>();
-		//global constant in Peer?
-		int chunkSize = 64 * 1024;
-		int numberOfChunks = msg.length / chunkSize;
-		if(msg.length % chunkSize != 0) numberOfChunks++;
+		
+		try {
+			inputStream = new FileInputStream(file);
+			long size = file.length();
+			
+			byte[] fileBuffer = new byte[(int) size];
+			inputStream.read(fileBuffer);
+						
+			int numberOfChunks = fileBuffer.length / Peer.CHUNK_MAX_SIZE;
+			
+			int i;
+			for (i = 0; i < numberOfChunks; i++) {
+				byte[] chunk = new byte[Peer.CHUNK_MAX_SIZE];
+				System.arraycopy(fileBuffer, i * Peer.CHUNK_MAX_SIZE, chunk, 0, Peer.CHUNK_MAX_SIZE);
+				chunks.add(chunk);
+			}
+			
+			int lastChunkSize = fileBuffer.length % Peer.CHUNK_MAX_SIZE; 
+			if (lastChunkSize != 0) {
+				
+				byte[] lastChunk = new byte[lastChunkSize];
+				System.arraycopy(fileBuffer, i * Peer.CHUNK_MAX_SIZE, lastChunk, 0, lastChunkSize);
+				chunks.add(lastChunk);
+				
+			}
+				
 
-		for(int i = 0; i < numberOfChunks; i++){
-			byte[] chunk = new byte[chunkSize];
-			System.arraycopy(msg, i*chunkSize, chunk, 0, chunkSize);
-			chunks.add(chunk);
+			
+			
+			
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
 		}
+		
 
 		return chunks;
 	}
@@ -124,53 +367,54 @@ public class Peer {
 			this.buffer = buffer;
 			this.channel = channel;
 		}
+
 		
-		private void sendStoredMessage(String fileId, int chunkNo) {
-			
-			try {
-				Message reply = Message.buildMessage(new MessageFields(MessageType.STORED, BACKUP_PROTOCOL_VERSION, id, fileId,chunkNo));
-				Peer.this.connection.getMC().sendMessage(reply);
-			} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			
-		}
-
-
 		@Override
 		public void run() {
 
-			this.message = Message.processMessage(this.buffer);
-			
-			if(id == this.message.getMessageFields().senderId)
-				return;
-			
-			System.out.println("\n---------  Message Received at " + this.channel.getName() + " ---------\n\t\t" + new String(message.getMessage()));
-					
-			switch(message.getMessageFields().messageType){
+			try {
+				
+				this.message = Message.processMessage(this.buffer);
+				
+				if (id == this.message.getMessageFields().senderId)
+					return;
+
+				System.out.println("\n---------  Message Received at " + this.channel.getName() + " ---------\n\t\t"
+						+ new String(message.getHeaderString()));
+
+				switch (message.getMessageFields().messageType) {
 
 				case PUTCHUNK:
-					//saveChunk(Message.processMessage(buffer));
 					
-					
+
 					try {
-						int delay = randomGenerator.nextInt(INITIAL_PUTCHUNK_WAIT_TIME);
+						int delay = randomGenerator.nextInt(STORED_WAIT_TIME);
 						Thread.sleep(delay);
 					} catch (InterruptedException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
-					
-					this.sendStoredMessage(this.message.getMessageFields().fileId, this.message.getMessageFields().chunkNo);
-					
+
+					stored(this.message);
 
 					break;
 				case STORED:
+					
+					registerChunk(this.message);
+					
+					
 					break;
-			default:
-				break;
+				default:
+					break;
+				}
+				
 			}
+			
+			catch(NumberFormatException e) {
+				e.printStackTrace();
+			}
+
+			
 
 		}
 
@@ -182,33 +426,80 @@ public class Peer {
 
 		public MulticastChannel multicastChannel;
 
-
 		public Dispatcher(MulticastChannel multicastChannel) {
 			this.multicastChannel = multicastChannel;
-
 
 		}
 
 		@Override
 		public void run() {
 
-			while(true) {
-				
-				byte[] buffer = new byte[2048];
-				
-				this.multicastChannel.receiveMessage(buffer);
+			while (true) {
 
+				byte[] buffer = new byte[MESSAGE_MAX_SIZE];
+
+				int realLength = this.multicastChannel.receiveMessage(buffer);
+				
+				if(realLength != buffer.length) {
+					
+					byte[] temp = buffer;
+					
+					buffer = new byte[realLength];
+					
+					System.arraycopy(temp, 0, buffer, 0, realLength);
+					
+				}
+				
 				Runnable handler = new MessageHandler(buffer, this.multicastChannel);
 
 				threadPool.execute(handler);
 
 			}
 
-
-
 		}
-
 
 	}
 
+	
+	
+	public void backup(String filePath, int desiredReplicationDegree) {
+		
+	
+		try {
+			
+			File file = new File(filePath);
+			
+			Path path = Paths.get(file.getAbsolutePath());
+			
+			BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+			
+			FileTime lastModifiedTime = attributes.lastModifiedTime();
+			
+			ArrayList<byte[]> chunks = chunkFile(file);
+			
+			for(int i = 0; i < chunks.size(); i++) {
+				
+				String fileId = hashString(file.getName() + "-" + lastModifiedTime);
+				putChunk(fileId, chunks.get(i), i+1, desiredReplicationDegree);
+				
+			}
+			
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
+		
+//		
+		
+		
+		
+		
+		
+	}
+	
+	
+	
 }

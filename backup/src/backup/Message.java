@@ -10,6 +10,12 @@ public class Message {
 	public final static byte CR = 0xD;
 	public final static byte LF = 0xA;
 	public final static String CRLF = new String(new byte[] {CR,LF});
+	
+	private byte[] message;
+	private MessageFields messageFields;
+	private byte[] chunk = new byte[Peer.CHUNK_MAX_SIZE];
+	
+	private String headerString;
 	 
 			
 	public static enum MessageType {
@@ -116,9 +122,7 @@ public class Message {
 	}
 
 
-	private byte[] message;
-	private MessageFields messageFields;
-	private byte[] chunk = new byte[Peer.CHUNK_MAX_SIZE];
+	
 	
 
 	private Message(MessageFields messageFields, byte[] chunk) {
@@ -136,30 +140,30 @@ public class Message {
 		Message result = new Message(messageFields, chunk);
 
 	
-		String headerString = messageFields.messageType.text + " " + messageFields.protocolVersion + " " + messageFields.senderId + " " + messageFields.fileId;
+		result.headerString = messageFields.messageType.text + " " + messageFields.protocolVersion + " " + messageFields.senderId + " " + messageFields.fileId;
 		
-		
+	
 		if(messageFields.messageType != MessageType.DELETE) {
 			
 			if(messageFields.chunkNo < 0 || messageFields.chunkNo > 1000000)
 				throw new ChunkNoException();
 			
-			headerString += (" " + messageFields.chunkNo);
+			result.headerString += (" " + messageFields.chunkNo);
 			
 			if(messageFields.messageType == MessageType.PUTCHUNK) {
 				
 				if(messageFields.replicationDegree < 1 || messageFields.replicationDegree > 9)
 					throw new ReplicationDegreeOutOfLimitsException();
 				
-				headerString += (" " + messageFields.replicationDegree);
+				result.headerString += (" " + messageFields.replicationDegree);
 				
 			}
 				
 		}
 		
-		headerString += (" " + CRLF + CRLF); 
+		result.headerString += (" " + CRLF + CRLF); 
 		
-		byte[] header = headerString.getBytes();
+		byte[] header = result.headerString.getBytes();
 		
 		if(messageFields.messageType == MessageType.PUTCHUNK || messageFields.messageType == MessageType.CHUNK) {
 			
@@ -187,10 +191,12 @@ public class Message {
 				
 	}
 
-	public static Message processMessage(byte[] message) {
+	public static Message processMessage(byte[] message) throws NumberFormatException {
 
 		Message result = new Message(message);		
 		byte[][] splitMessage = splitMessage(message);
+		
+		result.headerString = new String(splitMessage[0]);
 				
 		ByteArrayInputStream inputStream = new ByteArrayInputStream(splitMessage[0]);
 		
@@ -259,8 +265,14 @@ public class Message {
 	public byte[] getChunk() {
 		return chunk;
 	}
+	
+	
 
 	
+	public String getHeaderString() {
+		return headerString;
+	}
+
 	private static byte[][] splitMessage(byte[] message) {
 		
 		

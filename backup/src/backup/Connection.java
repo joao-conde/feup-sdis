@@ -71,18 +71,25 @@ public class Connection {
 			
 		}
 		
-		public void receiveMessage(byte[] buffer) {
+		public int receiveMessage(byte[] buffer) {
 			
 			DatagramPacket receivingPacket = new DatagramPacket(buffer, buffer.length);
+			
+			
 			try {
 				this.multicastSocket.receive(receivingPacket);
 				
+								
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+			
+			return receivingPacket.getLength();
 
 		}
+		
+		
 		
 		
 	}
