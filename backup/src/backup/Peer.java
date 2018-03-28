@@ -57,7 +57,7 @@ public class Peer implements Protocol {
 	
 	private String pathToPeer;
 	private String pathToPeerChunks;
-	private SaveChunksTable saveChunks = new SaveChunksTable();
+	private CloseResources closeResources = new CloseResources();
 	
 	private  Registry registry;
 	
@@ -219,7 +219,7 @@ public class Peer implements Protocol {
 
 	}
 
-	private class SaveChunksTable implements Runnable {
+	private class CloseResources implements Runnable {
 
 		@Override
 		public void run() {
@@ -260,13 +260,10 @@ public class Peer implements Protocol {
 				
 				pw.close();
 				
-			} catch (FileNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-			
-		
-			
+				Peer.this.registry.unbind(Protocol.PROTOCOL + "-" + Peer.this.id);
+				
+			} catch (FileNotFoundException | RemoteException | NotBoundException e) {	}
+				
 		}
 		
 		
@@ -279,23 +276,8 @@ public class Peer implements Protocol {
 		
 		Peer peer = new Peer(Integer.parseInt(args[0]));
 						
-		Runtime.getRuntime().addShutdownHook(new Thread(peer.saveChunks));
-		Runtime.getRuntime().addShutdownHook(new Thread() {
-			
-			@Override
-			public void run() {
-				
-				try {
-					peer.registry.unbind(Protocol.PROTOCOL + "-" + peer.id);
-				} catch (RemoteException | NotBoundException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				
-			}
-			
-		});
-
+		Runtime.getRuntime().addShutdownHook(new Thread(peer.closeResources));
+		
 	}
 
 	public Peer(int id) {
