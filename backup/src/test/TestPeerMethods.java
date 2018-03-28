@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import org.junit.Test;
 
 import backup.Peer;
+import backup.Utils;
 
 public class TestPeerMethods {
 
@@ -26,7 +27,7 @@ public class TestPeerMethods {
 				
 		for(String s : fileNames) {
 			
-			String fileId = Peer.hashString(s);
+			String fileId = Utils.hashString(s, Peer.HASH_ALGORITHM);
 			fileIds.add(fileId);
 			
 			assertEquals(64, fileId.length());
