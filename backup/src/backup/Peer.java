@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.nio.file.Files;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -264,6 +265,12 @@ public class Peer implements Protocol {
 
 		Runtime.getRuntime().addShutdownHook(new Thread(peer.closeResources));
 
+		/*if(peer.id == 1)
+			peer.backup("pic.jpg", 3, "3/3/3");
+			System.out.println(Utils.hashString("pic.jpg" + "-" + "3/3/3", HASH_ALGORITHM));
+		*/
+
+		if(peer.id == 3) peer.delete("pic.jpg", "3/3/3");
 	}
 
 	public Peer(int id) {
@@ -541,12 +548,10 @@ public class Peer implements Protocol {
 
 		File file = new File(this.pathToPeerReceivedFiles + "/" + fileName);
 		ArrayList<byte[]> chunks = Utils.chunkFile(file);
+		String fileId = Utils.hashString(file.getName() + "-" + lastModifiedDate, HASH_ALGORITHM);
 
 		for (int i = 0; i < chunks.size(); i++) {
-
-			String fileId = Utils.hashString(file.getName() + "-" + lastModifiedDate, HASH_ALGORITHM);
 			sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree);
-
 		}
 
 		file.delete();
@@ -591,6 +596,25 @@ public class Peer implements Protocol {
 			// TODO Auto-generated catch block
 		}
 
+	}
+
+
+	public void delete(String fileName, String lastModifiedDate){
+		System.out.println("Delete protocol initiated");
+
+		String fileIdToDelete = Utils.hashString(fileName + "-" + lastModifiedDate, HASH_ALGORITHM);
+		File[] files = new File(this.pathToPeerChunks).listFiles();
+		
+		if(files != null){
+			for(File f: files){
+				String fileId = f.getName().split("-")[0];
+
+				if(fileId == fileIdToDelete){
+					f.delete();
+				}
+			}
+		}
+	
 	}
 
 }
