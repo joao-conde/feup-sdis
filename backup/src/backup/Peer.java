@@ -153,9 +153,17 @@ public class Peer implements Protocol {
 					registerOtherSavedChunk(this.message);
 
 					break;
+
+				case DELETE:
+
+					deleteChunkFromDisk(this.message.getMessageFields().fileId);
+
+					break;
+
 				default:
 					break;
 				}
+
 
 			}
 
@@ -265,12 +273,9 @@ public class Peer implements Protocol {
 
 		Runtime.getRuntime().addShutdownHook(new Thread(peer.closeResources));
 
-		/*if(peer.id == 1)
-			peer.backup("pic.jpg", 3, "3/3/3");
-			System.out.println(Utils.hashString("pic.jpg" + "-" + "3/3/3", HASH_ALGORITHM));
-		*/
+		//if(peer.id == 1) peer.backup("pic.jpg", 1, "3/3/3");		
 
-		if(peer.id == 3) peer.delete("pic.jpg", "3/3/3");
+		//if(peer.id == 2) peer.delete("pic.jpg", "3/3/3");
 	}
 
 	public Peer(int id) {
@@ -334,6 +339,18 @@ public class Peer implements Protocol {
 			Message reply = Message.buildMessage(new MessageFields(MessageType.STORED, BACKUP_PROTOCOL_VERSION, id,
 					putChunkMessage.getMessageFields().fileId, putChunkMessage.getMessageFields().chunkNo));
 			Peer.this.connection.getMC().sendMessage(reply);
+		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+	}
+
+	private void sendDelete(String fileId) {
+
+		try {
+			Message deleteMsg = Message.buildMessage(new MessageFields(MessageType.DELETE, BACKUP_PROTOCOL_VERSION, this.id, fileId));
+			Peer.this.connection.getMC().sendMessage(deleteMsg);
 		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -600,21 +617,24 @@ public class Peer implements Protocol {
 
 
 	public void delete(String fileName, String lastModifiedDate){
-		System.out.println("Delete protocol initiated");
-
 		String fileIdToDelete = Utils.hashString(fileName + "-" + lastModifiedDate, HASH_ALGORITHM);
+		sendDelete(fileIdToDelete);
+		deleteChunkFromDisk(fileIdToDelete);
+	}
+
+	public void deleteChunkFromDisk(String fileIdToDelete){
 		File[] files = new File(this.pathToPeerChunks).listFiles();
-		
+
 		if(files != null){
 			for(File f: files){
 				String fileId = f.getName().split("-")[0];
-
-				if(fileId == fileIdToDelete){
+				if(fileId.equals(fileIdToDelete)){
 					f.delete();
 				}
 			}
 		}
-	
 	}
+
+	
 
 }
