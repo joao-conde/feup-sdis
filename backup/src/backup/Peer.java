@@ -280,7 +280,7 @@ public class Peer implements Protocol {
 
 		Runtime.getRuntime().addShutdownHook(new Thread(peer.closeResources));
 
-		if(peer.id == 1) peer.backup("pic.jpg", 1, "3/3/3");		
+		if(peer.id == 1 | peer.id == 3) peer.backup("pic.jpg", 1, "3/3/3");		
 
 		if(peer.id == 2) peer.delete("pic.jpg", "3/3/3");
 
@@ -673,20 +673,57 @@ public class Peer implements Protocol {
 		}
 
 		showRequestedBackupChunks(selfInitBackupChunks);
-		showStoredChunks(storedChunks);		
+		showStoredChunks(storedChunks);	
+		showStorageCapacity(storedChunks);	
 	}
 
 	public void showRequestedBackupChunks(ArrayList<ChunkInfo> selfRequestedChunks){
+		System.out.println("Requested Backup Files");
 		for(ChunkInfo chunkInfo: selfRequestedChunks){
-			System.out.println("BACKUP: " + chunkInfo.chunkNo);
+			//Path or name?
+			System.out.println("File path: " + "../res/peer-" + this.id + "/chunks/inbox");
+			System.out.println("File service ID: " + chunkInfo.fileId);
+			System.out.println("Desired replication degree: " + chunkInfo.desiredReplicationDegree);
+			
+			ArrayList<ChunkInfo> fileChunks = getStoredFileChunks(chunkInfo.fileId);
+
+			//TODO: ID or chunk No?
+			for(ChunkInfo filechunk: fileChunks){
+				System.out.println("File Chunk ID: " + filechunk.chunkNo);
+				System.out.println("File Chunk replication degree: " + filechunk.replicationDegree);
+			} 
 		}
 	}
 
 	public void showStoredChunks(ArrayList<ChunkInfo> storedChunks){
+		System.out.println("Locally stored file chunks");
 		for(ChunkInfo chunkInfo: storedChunks){
-			System.out.println("STORED: " + chunkInfo.chunkNo);
+			//ID or No? TODO
+			System.out.println("Chunk ID: " + chunkInfo.chunkNo);
+			System.out.println("Chunk size: SIZE NOT IN CHUNK INFO" ); //TODO: add size to ChunkInfo
+			System.out.println("Chunk replication degree: " + chunkInfo.replicationDegree);
+		}
+	}
+
+	public void showStorageCapacity(ArrayList<ChunkInfo> storedChunks){
+		System.out.println("Peer storage capacity");
+		//TODO: add chunk capacity to each ChunkInfo
+
+		//calculate the sum of all chunks size 
+		System.out.println("Stored size: ");
+	}
+
+	public ArrayList<ChunkInfo> getStoredFileChunks(String fileId){
+		ArrayList<ChunkInfo> fileChunks = new ArrayList<ChunkInfo>();
+
+		for (ChunkInfo chunkInfo : chunkMap.values()) {
+			
+			if(chunkInfo.fileId.equals(fileId))
+			fileChunks.add(chunkInfo);
+
 		}
 
+		return fileChunks;
 	}
 	
 
