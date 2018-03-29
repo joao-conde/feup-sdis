@@ -64,6 +64,7 @@ public class Peer implements Protocol {
 		public int desiredReplicationDegree;
 		public String chunkId;
 		public String fileId;
+		public int chunkNo;
 		public int backupInitiatorPeer;
 
 		public ChunkInfo(int desiredReplicationDegree, int chunkNo, String fileId, int backupInitiatorPeer) {
@@ -74,6 +75,8 @@ public class Peer implements Protocol {
 			this.desiredReplicationDegree = desiredReplicationDegree;
 			this.chunkId = buildChunkId(chunkNo, fileId);
 			this.fileId = fileId;
+			this.backupInitiatorPeer = backupInitiatorPeer;
+			this.chunkNo = chunkNo;
 
 			for (int i : seeds) {
 				this.addPeer(new Integer(i));
@@ -246,7 +249,9 @@ public class Peer implements Protocol {
 						pw.print(SEPARATOR);
 						pw.print(chunkInfo.desiredReplicationDegree);
 						pw.print(SEPARATOR);
-						pw.println(chunkInfo.fileId);
+						pw.print(chunkInfo.fileId);
+						pw.print(SEPARATOR);
+						pw.println(chunkInfo.backupInitiatorPeer);
 
 					}
 
@@ -278,6 +283,8 @@ public class Peer implements Protocol {
 		if(peer.id == 1) peer.backup("pic.jpg", 1, "3/3/3");		
 
 		if(peer.id == 2) peer.delete("pic.jpg", "3/3/3");
+
+		peer.showServiceState();
 	}
 
 	public Peer(int id) {
@@ -650,7 +657,37 @@ public class Peer implements Protocol {
 	}
 
 
+	public void showServiceState(){
+		
+		ArrayList<ChunkInfo> selfInitBackupChunks = new ArrayList<ChunkInfo>();
+		ArrayList<ChunkInfo> storedChunks = new ArrayList<ChunkInfo>();
 
+		for (ChunkInfo chunkInfo : chunkMap.values()) {
+			
+			if(chunkInfo.backupInitiatorPeer == this.id)
+				selfInitBackupChunks.add(chunkInfo);
+
+			if(chunkInfo.seeds.contains(this.id))
+				storedChunks.add(chunkInfo);
+
+		}
+
+		showRequestedBackupChunks(selfInitBackupChunks);
+		showStoredChunks(storedChunks);		
+	}
+
+	public void showRequestedBackupChunks(ArrayList<ChunkInfo> selfRequestedChunks){
+		for(ChunkInfo chunkInfo: selfRequestedChunks){
+			System.out.println("BACKUP: " + chunkInfo.chunkNo);
+		}
+	}
+
+	public void showStoredChunks(ArrayList<ChunkInfo> storedChunks){
+		for(ChunkInfo chunkInfo: storedChunks){
+			System.out.println("STORED: " + chunkInfo.chunkNo);
+		}
+
+	}
 	
 
 }
