@@ -20,6 +20,7 @@ import java.util.function.BiConsumer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Random;
 import java.util.Scanner;
 
@@ -156,7 +157,7 @@ public class Peer implements Protocol {
 
 				case DELETE:
 
-					deleteChunkFromDisk(this.message.getMessageFields().fileId);
+					deleteFileFromDisk(this.message.getMessageFields().fileId);
 
 					break;
 
@@ -273,9 +274,9 @@ public class Peer implements Protocol {
 
 		Runtime.getRuntime().addShutdownHook(new Thread(peer.closeResources));
 
-		//if(peer.id == 1) peer.backup("pic.jpg", 1, "3/3/3");		
+		if(peer.id == 1) peer.backup("pic.jpg", 1, "3/3/3");		
 
-		//if(peer.id == 2) peer.delete("pic.jpg", "3/3/3");
+		if(peer.id == 2) peer.delete("pic.jpg", "3/3/3");
 	}
 
 	public Peer(int id) {
@@ -302,7 +303,7 @@ public class Peer implements Protocol {
 		new File(this.pathToPeerReceivedFiles).mkdir();
 
 		this.loadChunksTable();
-
+	
 		try {
 
 			registry = LocateRegistry.createRegistry(Registry.REGISTRY_PORT);
@@ -625,17 +626,20 @@ public class Peer implements Protocol {
 	public void delete(String fileName, String lastModifiedDate){
 		String fileIdToDelete = Utils.hashString(fileName + "-" + lastModifiedDate, HASH_ALGORITHM);
 		sendDelete(fileIdToDelete);
-		deleteChunkFromDisk(fileIdToDelete);
+		deleteFileFromDisk(fileIdToDelete);
 	}
 
-	public void deleteChunkFromDisk(String fileIdToDelete){
-		File[] files = new File(this.pathToPeerChunks).listFiles();
+	public void deleteFileFromDisk(String fileIdToDelete){
+		File[] chunks = new File(this.pathToPeerChunks).listFiles();
 
-		if(files != null){
-			for(File f: files){
-				String fileId = f.getName().split("-")[0];
-				if(fileId.equals(fileIdToDelete)){
-					f.delete();
+		if(chunks != null){
+			for(File chunk: chunks){
+				String[] splitId = chunk.getName().split("-"); 
+				String chunkId = ChunkInfo.buildChunkId(Integer.parseInt(splitId[1]), splitId[0]);
+
+				if(splitId[0].equals(fileIdToDelete)){
+					chunk.delete();
+					chunkMap.remove(chunkId);
 				}
 			}
 		}

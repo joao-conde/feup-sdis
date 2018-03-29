@@ -82,6 +82,10 @@ public class Client {
 								
 				break;
 
+			case DELETE:
+				
+				break;
+
 			default:
 				break;
 			}
