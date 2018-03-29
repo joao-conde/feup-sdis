@@ -1,11 +1,24 @@
 package backup;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
 import backup.Protocol.SUB_PROTOCOL_TYPE;
 
 public class Client {
+	
+	public static final int RMI_CHUNK = 8094;
+	
+	private Registry registry;
+	private Protocol stub;
 
 	public static void main(String[] args) {
 
@@ -44,9 +57,9 @@ public class Client {
 		
 		try {
 			
-			Registry registry = LocateRegistry.getRegistry(host);
+			registry = LocateRegistry.getRegistry(host);
 			
-			Protocol stub = (Protocol) registry.lookup(remoteObject);
+			stub = (Protocol) registry.lookup(remoteObject);
 			
 						
 			SUB_PROTOCOL_TYPE subProtocol = SUB_PROTOCOL_TYPE.type(protocol); 
@@ -55,8 +68,18 @@ public class Client {
 			switch (subProtocol) {
 			case BACKUP:
 				
-				stub.backup(op1, Integer.parseInt(op2));
+				File file = new File(op1);
 				
+				this.sendData(op1);
+				
+				Path path = Paths.get(file.getAbsolutePath());
+				
+				BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+				
+				FileTime lastModifiedTime = attributes.lastModifiedTime();
+				
+				stub.backup(file.getName(), Integer.parseInt(op2), lastModifiedTime.toString());
+								
 				break;
 
 			default:
@@ -64,14 +87,46 @@ public class Client {
 			}
 			
 			
-			
-
-
 		} catch (Exception e) {
 			System.err.println("Client exception: " + e.toString());
 			e.printStackTrace();
 		}
 
 	}
+	
+	private void sendData(String filePath) {
+		
+		File file = new File(filePath);
+		
+		try {
+			
+			FileInputStream input = new FileInputStream(file);
+			
+			
+			byte[] buffer = new byte[RMI_CHUNK];
+			
+			int bytesRead;
+
+			while((bytesRead = input.read(buffer)) > 0) {
+				
+				stub.receiveData(file.getName(), bytesRead, buffer);
+
+			}
+			
+
+
+
+			input.close();
+			
+						
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
+	}
+	
+	
 
 }
