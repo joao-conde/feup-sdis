@@ -35,7 +35,7 @@ public class Peer implements Protocol {
 	public final static int CHUNK_MAX_SIZE = 64000;
 	public final static int MESSAGE_MAX_SIZE = CHUNK_MAX_SIZE + 150;
 	public final static int STORED_WAIT_TIME = 400;
-	public final static int PUT_CHUNK_MAX_TIMES = 5;
+	public final static int PUT_CHUNK_MAX_TIMES = 1;
 	public final static int INITIAL_PUT_CHUNK_WAIT_TIME = 1000;
 	public final static String HASH_ALGORITHM = "SHA-256";
 	public final static char SEPARATOR = ' ';
@@ -568,6 +568,12 @@ public class Peer implements Protocol {
 		String fileId = Utils.hashString(file.getName() + "-" + lastModifiedDate, HASH_ALGORITHM);
 
 		for (int i = 0; i < chunks.size(); i++) {
+			try {
+				Thread.sleep(50);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 			sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree);
 		}
 
