@@ -64,12 +64,13 @@ public class Peer implements Protocol {
 		public int desiredReplicationDegree;
 		public String chunkId;
 		public String fileId;
+		public int backupInitiatorPeer;
 
-		public ChunkInfo(int desiredReplicationDegree, int chunkNo, String fileId) {
-			this(desiredReplicationDegree, chunkNo, fileId, new int[] {});
+		public ChunkInfo(int desiredReplicationDegree, int chunkNo, String fileId, int backupInitiatorPeer) {
+			this(desiredReplicationDegree, chunkNo, fileId, backupInitiatorPeer, new int[] {});
 		}
 
-		public ChunkInfo(int desiredReplicationDegree, int chunkNo, String fileId, int[] seeds) {
+		public ChunkInfo(int desiredReplicationDegree, int chunkNo, String fileId, int backupInitiatorPeer, int[] seeds) {
 			this.desiredReplicationDegree = desiredReplicationDegree;
 			this.chunkId = buildChunkId(chunkNo, fileId);
 			this.fileId = fileId;
@@ -359,7 +360,7 @@ public class Peer implements Protocol {
 
 	}
 
-	private void sendPutChunk(String fileId, byte[] chunk, int chunkNo, int desiredReplicationDegree) {
+	private void sendPutChunk(String fileId, byte[] chunk, int chunkNo, int desiredReplicationDegree, int peerId) {
 
 		class PutChunk implements Runnable {
 
@@ -369,7 +370,7 @@ public class Peer implements Protocol {
 
 			public PutChunk(int desiredReplicationDegree) {
 
-				chunkInfo = registerSentChunk(chunkNo, fileId, desiredReplicationDegree);
+				chunkInfo = registerSentChunk(chunkNo, fileId, desiredReplicationDegree, peerId);
 
 			}
 
@@ -387,7 +388,7 @@ public class Peer implements Protocol {
 
 						Peer.this.connection.getMDB().sendMessage(message);
 
-						chunkInfo = registerSentChunk(chunkNo, fileId, desiredReplicationDegree);
+						chunkInfo = registerSentChunk(chunkNo, fileId, desiredReplicationDegree, peerId);
 
 						System.out.println("Attempt " + ++counter + "\n");
 
@@ -440,13 +441,13 @@ public class Peer implements Protocol {
 
 	}
 
-	private synchronized ChunkInfo registerSentChunk(int chunkNo, String fileId, int desiredReplicationDegree) {
+	private synchronized ChunkInfo registerSentChunk(int chunkNo, String fileId, int desiredReplicationDegree, int peerId) {
 
 		ChunkInfo chunkInfo = chunkMap.get(ChunkInfo.buildChunkId(chunkNo, fileId));
 
 		if (chunkInfo == null) {
 
-			chunkInfo = new ChunkInfo(desiredReplicationDegree, chunkNo, fileId);
+			chunkInfo = new ChunkInfo(desiredReplicationDegree, chunkNo, fileId, peerId);
 			chunkMap.put(chunkInfo.chunkId, chunkInfo);
 		}
 
@@ -468,7 +469,7 @@ public class Peer implements Protocol {
 		if (chunkInfo == null) {
 
 			chunkInfo = new ChunkInfo(putChunkMessage.getMessageFields().replicationDegree,
-					putChunkMessage.getMessageFields().chunkNo, putChunkMessage.getMessageFields().fileId,
+					putChunkMessage.getMessageFields().chunkNo, putChunkMessage.getMessageFields().fileId, putChunkMessage.getMessageFields().senderId,
 					new int[] {});
 			chunkMap.put(chunkId, chunkInfo);
 
@@ -494,6 +495,7 @@ public class Peer implements Protocol {
 
 			chunkInfo = new ChunkInfo(storedMessage.getMessageFields().replicationDegree,
 					storedMessage.getMessageFields().chunkNo, storedMessage.getMessageFields().fileId,
+					storedMessage.getMessageFields().senderId,
 					new int[] { storedMessage.getMessageFields().senderId });
 			chunkMap.put(chunkId, chunkInfo);
 
@@ -575,7 +577,7 @@ public class Peer implements Protocol {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree);
+			sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree, this.id);
 		}
 
 		file.delete();
@@ -607,7 +609,9 @@ public class Peer implements Protocol {
 
 				String fileId = lineScanner.next();
 
-				ChunkInfo chunkInfo = new ChunkInfo(desiredRepDeg, chunkNo, fileId, seeds);
+				int backupInitiatorPeer = lineScanner.nextInt();
+
+				ChunkInfo chunkInfo = new ChunkInfo(desiredRepDeg, chunkNo, fileId, backupInitiatorPeer, seeds);
 
 				this.chunkMap.put(chunkInfo.chunkId, chunkInfo);
 
@@ -644,6 +648,8 @@ public class Peer implements Protocol {
 			}
 		}
 	}
+
+
 
 	
 
