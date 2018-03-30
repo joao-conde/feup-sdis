@@ -9,6 +9,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
@@ -16,7 +20,6 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
-import java.text.DateFormat;
 import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -25,7 +28,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
@@ -64,7 +66,6 @@ public class Peer implements Protocol {
 
 	private String pathToPeer;
 	private String pathToPeerChunks;
-	private String pathToPeerReceivedFiles;
 	private String pathToPeerRestored;
 	private String pathToPeerTemp;
 	private CloseResources closeResources = new CloseResources();
@@ -383,12 +384,10 @@ public class Peer implements Protocol {
 
 		this.pathToPeer = "../res/peer-" + id;
 		this.pathToPeerChunks = pathToPeer + "/chunks";
-		this.pathToPeerReceivedFiles = pathToPeer + "/inbox";
 		this.pathToPeerRestored = this.pathToPeer + "/restored";
 		this.pathToPeerTemp = this.pathToPeer + "/temp";
 
 		new File(this.pathToPeerChunks).mkdirs();
-		new File(this.pathToPeerReceivedFiles).mkdir();
 		new File(this.pathToPeerRestored).mkdir();
 		new File(this.pathToPeerTemp).mkdir();
 
@@ -634,49 +633,66 @@ public class Peer implements Protocol {
 
 	}
 
-	public void receiveData(String fileName, int length, byte[] buffer) {
+//	public void receiveData(String fileName, int length, byte[] buffer) {
+//
+//		File file = new File(this.pathToPeerReceivedFiles + "/" + fileName);
+//
+//		try {
+//
+//			FileOutputStream output = new FileOutputStream(file, true);
+//
+//			output.write(buffer, 0, length);
+//
+//			output.close();
+//
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//
+//	}
 
-		File file = new File(this.pathToPeerReceivedFiles + "/" + fileName);
+	public void backup(String filePath, int desiredReplicationDegree) {
 
+		File file = new File(filePath);
+		
+		Path path = Paths.get(file.getAbsolutePath());
+		
+		BasicFileAttributes attributes;
 		try {
+			
+			attributes = Files.readAttributes(path, BasicFileAttributes.class);
+			
+			FileTime lastModifiedTime = attributes.lastModifiedTime();
+			
+			String fileId = Utils.hashString(file.getName() + "-" + lastModifiedTime, HASH_ALGORITHM);
 
-			FileOutputStream output = new FileOutputStream(file, true);
-
-			output.write(buffer, 0, length);
-
-			output.close();
-
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
-	}
-
-	public void backup(String fileName, int desiredReplicationDegree, String lastModifiedDate) {
-
-		File file = new File(this.pathToPeerReceivedFiles + "/" + fileName);
-		ArrayList<byte[]> chunks = Utils.chunkFile(file);
-		String fileId = Utils.hashString(file.getName() + "-" + lastModifiedDate, HASH_ALGORITHM);
-
-		for (int i = 0; i < chunks.size(); i++) {
-			try {
-				Thread.sleep(PUT_CHUNK_DELAY);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			ArrayList<byte[]> chunks = Utils.chunkFile(file);
+			
+			for (int i = 0; i < chunks.size(); i++) {
+				try {
+					Thread.sleep(PUT_CHUNK_DELAY);
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree, this.id);
 			}
-			sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree, this.id);
+			
+			String[] fileInfo = new String[3];
+			fileInfo[0] = file.getName();
+			fileInfo[1] = lastModifiedTime.toString();
+			fileInfo[2] = Integer.toString(chunks.size());
+			
+			fileMap.put(fileId, fileInfo);
+		
+		
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
 		}
 		
-		String[] fileInfo = new String[3];
-		fileInfo[0] = fileName;
-		fileInfo[1] = lastModifiedDate;
-		fileInfo[2] = Integer.toString(chunks.size());
 		
-		fileMap.put(fileId, fileInfo);
-
-		file.delete();
 
 	}
 
@@ -876,7 +892,7 @@ public class Peer implements Protocol {
 	
 	public void restore(String fileName) {
 		
-		String fileId = "cef8c1533606122ea6bbcc20036f1aa778386c0d870242c0db3cf02c08e13604";//findFileId(fileName);
+		String fileId = findBackedUpFileId(fileName);
 		
 		if(fileId == null)
 			return;
@@ -906,7 +922,11 @@ public class Peer implements Protocol {
 		
 		String chunkId = ChunkInfo.buildChunkId(message.getMessageFields().chunkNo, message.getMessageFields().fileId);
 		
-		File chunkFile = new File(pathToPeerTemp + "/" + chunkId);
+		String fileName = fileMap.get(message.getMessageFields().fileId)[0];
+		
+		String tempFolder = pathToPeerTemp + "/temp-" + fileName;
+		
+		File chunkFile = new File(pathToPeerTemp + "/temp-" + fileName + "/" + chunkId);
 		
 		if(chunkFile.exists())
 			return;
@@ -927,6 +947,7 @@ public class Peer implements Protocol {
 		
 		if(this.remainingChunks == 0) {
 			
+			Utils.mergeChunks(pathToPeerRestored + "/" + fileName, tempFolder, message.getMessageFields().fileId);
 			
 			
 		}

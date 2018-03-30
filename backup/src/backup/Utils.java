@@ -1,6 +1,5 @@
 package backup;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -101,9 +100,13 @@ public class Utils {
 				byte[] chunkBuffer = new byte[(int)chunk.length()];
 				in.read(chunkBuffer);
 				out.write(chunkBuffer);
+				
+				chunk.delete();
 
 				chunk = new File(chunksFolder + '/' + fileId + '-' + chunkNo++);
 			}
+			
+			new File(chunksFolder).delete();
 
 
 			out.close();

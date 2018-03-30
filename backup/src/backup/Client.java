@@ -1,13 +1,6 @@
 package backup;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
@@ -65,17 +58,11 @@ public class Client {
 				
 				op1 = args[2];
 				op2 = args[3];
-				File file = new File(op1);
 				
-				this.sendData(op1);
+				//this.sendData(op1);
 				
-				Path path = Paths.get(file.getAbsolutePath());
-				
-				BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
-				
-				FileTime lastModifiedTime = attributes.lastModifiedTime();
-								
-				stub.backup(file.getName(), Integer.parseInt(op2), lastModifiedTime.toString());
+						
+				stub.backup(op1, Integer.parseInt(op2));
 								
 				break;
 
@@ -90,6 +77,13 @@ public class Client {
 			case STATE:
 				System.out.println(stub.showServiceState());
 				break;
+				
+			case RESTORE:
+				
+				op1 = args[2];				
+				stub.restore(op1);
+				
+				break;
 
 			default:
 				break;
@@ -103,38 +97,38 @@ public class Client {
 
 	}
 	
-	private void sendData(String filePath) {
-		
-		File file = new File(filePath);
-		
-		try {
-			
-			FileInputStream input = new FileInputStream(file);
-			
-			
-			byte[] buffer = new byte[RMI_CHUNK];
-			
-			int bytesRead;
-
-			while((bytesRead = input.read(buffer)) > 0) {
-				
-				stub.receiveData(file.getName(), bytesRead, buffer);
-
-			}
-			
-
-
-
-			input.close();
-			
-						
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-		
-	}
+//	private void sendData(String filePath) {
+//		
+//		File file = new File(filePath);
+//		
+//		try {
+//			
+//			FileInputStream input = new FileInputStream(file);
+//			
+//			
+//			byte[] buffer = new byte[RMI_CHUNK];
+//			
+//			int bytesRead;
+//
+//			while((bytesRead = input.read(buffer)) > 0) {
+//				
+//				stub.receiveData(file.getName(), bytesRead, buffer);
+//
+//			}
+//			
+//
+//
+//
+//			input.close();
+//			
+//						
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//		
+//		
+//	}
 	
 	
 
