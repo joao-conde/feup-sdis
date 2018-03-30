@@ -1,6 +1,7 @@
 package backup;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -39,6 +40,8 @@ public class Peer implements Protocol {
 	public final static int MAX_RANDOM_WAIT_TIME = 400;
 	public final static int PUT_CHUNK_MAX_TIMES = 5;
 	public final static int INITIAL_PUT_CHUNK_WAIT_TIME = 1000;
+	public final static int KBYTES = 1000;
+	public final static int MAX_STORAGE_SIZE = 200000; 
 	public final static String HASH_ALGORITHM = "SHA-256";
 	public final static char SEPARATOR = ' ';
 	public final static String STATE_FILE_NAME = "state";
@@ -344,7 +347,6 @@ public class Peer implements Protocol {
 				peer.requestChunk("cef8c1533606122ea6bbcc20036f1aa778386c0d870242c0db3cf02c08e13604-1");
 		}
 
-		peer.showServiceState();
 	}
 
 	public Peer(int id) {
@@ -881,8 +883,10 @@ public class Peer implements Protocol {
 	}
 
 
-	public void showServiceState(){
+	public String showServiceState(){
 		
+		String serviceState = "";
+
 		ArrayList<ChunkInfo> selfInitBackupChunks = new ArrayList<ChunkInfo>();
 		ArrayList<ChunkInfo> storedChunks = new ArrayList<ChunkInfo>();
 
@@ -893,48 +897,91 @@ public class Peer implements Protocol {
 
 			if(chunkInfo.seeds.contains(this.id))
 				storedChunks.add(chunkInfo);
-
+			
 		}
 
-		showRequestedBackupChunks(selfInitBackupChunks);
-		showStoredChunks(storedChunks);	
-		showStorageCapacity(storedChunks);	
+		serviceState += showRequestedBackupChunks(selfInitBackupChunks);
+		serviceState += showStoredChunks(storedChunks);	
+		serviceState += showStorageCapacity(storedChunks);	
+
+		return serviceState;
 	}
 
-	public void showRequestedBackupChunks(ArrayList<ChunkInfo> selfRequestedChunks){
-		System.out.println("Requested Backup Files");
+	public String showRequestedBackupChunks(ArrayList<ChunkInfo> selfRequestedChunks){
+		
+		ByteArrayOutputStream outBuffer = new ByteArrayOutputStream(); 
+		PrintWriter out = new PrintWriter(outBuffer);
+		
+		if(selfRequestedChunks.size() > 0)
+			out.println("\n-----Requested Backup Files-----");
+		else
+			out.println("\n-----No backups requested-----");
+		
+		ArrayList<String> uniqueFiles = new ArrayList<String>();
+
 		for(ChunkInfo chunkInfo: selfRequestedChunks){
-			//Path or name?
-			System.out.println("File path: " + "../res/peer-" + this.id + "/chunks/inbox");
-			System.out.println("File service ID: " + chunkInfo.fileId);
-			System.out.println("Desired replication degree: " + chunkInfo.desiredReplicationDegree);
+
+			if(uniqueFiles.contains(new String(chunkInfo.fileId)))
+				continue;
+			else uniqueFiles.add(chunkInfo.fileId);
+
+			out.println("\nFile path: " + "../res/peer-" + this.id + "/chunks/inbox");
+			out.println("File service ID: " + chunkInfo.fileId);
+			out.println("Desired replication degree: " + chunkInfo.desiredReplicationDegree);
 			
 			ArrayList<ChunkInfo> fileChunks = getStoredFileChunks(chunkInfo.fileId);
 
-			//TODO: ID or chunk No?
 			for(ChunkInfo filechunk: fileChunks){
-				System.out.println("File Chunk ID: " + filechunk.chunkNo);
-				System.out.println("File Chunk replication degree: " + filechunk.replicationDegree);
+				out.println("File Chunk ID: " + filechunk.chunkNo);
+				out.println("File Chunk replication degree: " + filechunk.replicationDegree);
 			} 
 		}
+		
+		out.close();
+		return outBuffer.toString();
 	}
 
-	public void showStoredChunks(ArrayList<ChunkInfo> storedChunks){
-		System.out.println("Locally stored file chunks");
+	public String showStoredChunks(ArrayList<ChunkInfo> storedChunks){
+
+		ByteArrayOutputStream outBuffer = new ByteArrayOutputStream(); 
+		PrintWriter out = new PrintWriter(outBuffer);
+		
+		if(storedChunks.size() > 0)
+			out.println("\n-----Locally stored file chunks-----");
+		else
+			out.println("\n-----No chunk stored locally-----");
+		
 		for(ChunkInfo chunkInfo: storedChunks){
-			//ID or No? TODO
-			System.out.println("Chunk ID: " + chunkInfo.chunkNo);
-			System.out.println("Chunk size: SIZE NOT IN CHUNK INFO" ); //TODO: add size to ChunkInfo
-			System.out.println("Chunk replication degree: " + chunkInfo.replicationDegree);
+
+			out.println("\nChunk ID: " + chunkInfo.chunkId);
+
+			File chunk = new File(this.pathToPeerChunks + '/' + chunkInfo.chunkId);
+			out.println("Chunk size: " + chunk.length()/KBYTES + " KBytes"); 
+
+			out.println("Chunk replication degree: " + chunkInfo.replicationDegree);
 		}
+
+		out.close();
+		return outBuffer.toString();
 	}
 
-	public void showStorageCapacity(ArrayList<ChunkInfo> storedChunks){
-		System.out.println("Peer storage capacity");
-		//TODO: add chunk capacity to each ChunkInfo
+	public String showStorageCapacity(ArrayList<ChunkInfo> storedChunks){
 
-		//calculate the sum of all chunks size 
-		System.out.println("Stored size: ");
+		ByteArrayOutputStream outBuffer = new ByteArrayOutputStream(); 
+		PrintWriter out = new PrintWriter(outBuffer);
+
+		out.println("\n-----Peer storage-----");
+		int storedSize = 0;
+		for(ChunkInfo chunkInfo: storedChunks){
+			File chunk = new File(this.pathToPeerChunks + "/" + chunkInfo.chunkId);
+			storedSize += chunk.length();
+		}
+
+		out.println("\nPeer storage maximum capacity: " + MAX_STORAGE_SIZE + " KBytes");
+		out.println("\nPeer used space (stored chunks size): " + storedSize/KBYTES + " KBytes");
+
+		out.close();
+		return outBuffer.toString();
 	}
 
 	public ArrayList<ChunkInfo> getStoredFileChunks(String fileId){
@@ -943,7 +990,7 @@ public class Peer implements Protocol {
 		for (ChunkInfo chunkInfo : chunkMap.values()) {
 			
 			if(chunkInfo.fileId.equals(fileId))
-			fileChunks.add(chunkInfo);
+				fileChunks.add(chunkInfo);
 
 		}
 
