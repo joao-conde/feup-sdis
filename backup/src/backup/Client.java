@@ -33,8 +33,6 @@ public class Client {
 
 		}
 
-			
-
 		new Client(args);
 
 	}
@@ -61,12 +59,12 @@ public class Client {
 						
 			SUB_PROTOCOL_TYPE subProtocol = SUB_PROTOCOL_TYPE.type(protocol); 
 			
-			
+			String op1, op2;
 			switch (subProtocol) {
 			case BACKUP:
 				
-				String op1 = args[2];
-				String op2 = args[3];
+				op1 = args[2];
+				op2 = args[3];
 				File file = new File(op1);
 				
 				this.sendData(op1);
@@ -76,13 +74,17 @@ public class Client {
 				BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
 				
 				FileTime lastModifiedTime = attributes.lastModifiedTime();
-				
+								
 				stub.backup(file.getName(), Integer.parseInt(op2), lastModifiedTime.toString());
 								
 				break;
 
 			case DELETE:
-				
+				op1 = args[2];
+				File fileToDelete = new File(op1);
+
+				stub.delete(fileToDelete.getName());
+
 				break;
 
 			case STATE:

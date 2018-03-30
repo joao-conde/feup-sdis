@@ -9,18 +9,23 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.nio.file.attribute.FileTime;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.text.DateFormat;
+import java.time.Instant;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Random;
@@ -859,9 +864,28 @@ public class Peer implements Protocol {
 	}
 	
 
+	public String findBackedUpFileId(String fileName){
+		ArrayList<FileTime> dates = new ArrayList<FileTime>(); 
+		
+		for(String[] f: fileMap.values()){
+			if(f[0].equals(fileName)){
+				dates.add(FileTime.from(Instant.parse(f[1])));
+			}
+		}
 
-	public void delete(String fileName, String lastModifiedDate){
-		String fileIdToDelete = Utils.hashString(fileName + "-" + lastModifiedDate, HASH_ALGORITHM);
+		String result = null;
+		
+		if(dates.size() > 0)
+			result = Utils.hashString(fileName + "-" + Collections.max(dates).toString(), HASH_ALGORITHM);
+		
+		return result;
+	}
+
+	public void delete(String fileName){
+		String fileIdToDelete = findBackedUpFileId(fileName);
+
+		if(fileIdToDelete == null) return;
+		
 		sendDelete(fileIdToDelete);
 		deleteFileFromDisk(fileIdToDelete);
 	}
@@ -877,6 +901,7 @@ public class Peer implements Protocol {
 				if(splitId[0].equals(fileIdToDelete)){
 					chunk.delete();
 					chunkMap.remove(chunkId);
+					fileMap.remove(fileIdToDelete);
 				}
 			}
 		}
@@ -927,6 +952,10 @@ public class Peer implements Protocol {
 
 			out.println("\nFile path: " + "../res/peer-" + this.id + "/chunks/inbox");
 			out.println("File service ID: " + chunkInfo.fileId);
+
+			String[] fileAttr = fileMap.get(chunkInfo.fileId);
+			out.println("File name: " + fileAttr[0]);
+			out.println("File last modified date: " + fileAttr[1]);
 			out.println("Desired replication degree: " + chunkInfo.desiredReplicationDegree);
 			
 			ArrayList<ChunkInfo> fileChunks = getStoredFileChunks(chunkInfo.fileId);
