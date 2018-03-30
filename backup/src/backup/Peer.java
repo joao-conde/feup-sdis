@@ -60,12 +60,16 @@ public class Peer implements Protocol {
 	private String pathToPeer;
 	private String pathToPeerChunks;
 	private String pathToPeerReceivedFiles;
+	private String pathToPeerRestored;
+	private String pathToPeerTemp;
 	private CloseResources closeResources = new CloseResources();
 	
 	private HashMap<String, Boolean> sendingChunks = new HashMap<>();
 	private HashMap<String, Boolean> receivingChunks = new HashMap<>();
 	
 	private HashMap<String, String[]> fileMap = new HashMap<>();
+	
+	private int remainingChunks;
 
 	private Registry registry;
 
@@ -188,6 +192,11 @@ public class Peer implements Protocol {
 						if(expectingChunk) {
 							
 							System.out.println("I am expecting this chunk so i will save it");
+							
+							
+							processReceivedChunk(message);
+							
+							
 							updateReceivingChunk(chunkId, false);
 							updateSentChunk(chunkId, false);
 							break;
@@ -315,6 +324,8 @@ public class Peer implements Protocol {
 					pwf.write(values[0]);
 					pwf.write(SEPARATOR);
 					pwf.write(values[1]);
+					pwf.write(SEPARATOR);
+					pwf.write(values[2]);
 
 				}
 				
@@ -368,9 +379,13 @@ public class Peer implements Protocol {
 		this.pathToPeer = "../res/peer-" + id;
 		this.pathToPeerChunks = pathToPeer + "/chunks";
 		this.pathToPeerReceivedFiles = pathToPeer + "/inbox";
+		this.pathToPeerRestored = this.pathToPeer + "/restored";
+		this.pathToPeerTemp = this.pathToPeer + "/temp";
 
 		new File(this.pathToPeerChunks).mkdirs();
 		new File(this.pathToPeerReceivedFiles).mkdir();
+		new File(this.pathToPeerRestored).mkdir();
+		new File(this.pathToPeerTemp).mkdir();
 
 		this.loadChunksTable();
 	
@@ -649,9 +664,10 @@ public class Peer implements Protocol {
 			sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree, this.id);
 		}
 		
-		String[] fileInfo = new String[2];
+		String[] fileInfo = new String[3];
 		fileInfo[0] = fileName;
 		fileInfo[1] = lastModifiedDate;
+		fileInfo[2] = Integer.toString(chunks.size());
 		
 		fileMap.put(fileId, fileInfo);
 
@@ -706,8 +722,9 @@ public class Peer implements Protocol {
 				String fileId = lineScanner.next();
 				String fileName = lineScanner.next();
 				String lastModifiedDate = lineScanner.next();
+				String numberOfChunks = lineScanner.next();
 				
-				fileMap.put(fileId, new String[] {fileName,lastModifiedDate});
+				fileMap.put(fileId, new String[] {fileName,lastModifiedDate,numberOfChunks});
 				
 				lineScanner.close();
 				
@@ -852,8 +869,62 @@ public class Peer implements Protocol {
 	}
 	
 	
-	public void restore(String filePath) {
+	public void restore(String fileName) {
 		
+		String fileId = "cef8c1533606122ea6bbcc20036f1aa778386c0d870242c0db3cf02c08e13604";//findFileId(fileName);
+		
+		if(fileId == null)
+			return;
+		
+		String[] fileInfo = fileMap.get(fileId);
+		
+		int numberOfChunks = Integer.parseInt(fileInfo[2]);
+		
+		this.remainingChunks = numberOfChunks;
+		
+		File tempFolder = new File(pathToPeerTemp + "/temp-" + fileInfo[0]);
+		tempFolder.mkdirs();
+		
+		for(int i = 1; i <= numberOfChunks; i++) {
+			
+			String chunkId = fileId + "-" + i;
+			requestChunk(chunkId);
+			
+		}
+		
+		
+		
+	}
+	
+	public synchronized void processReceivedChunk(Message message) {
+		
+		
+		String chunkId = ChunkInfo.buildChunkId(message.getMessageFields().chunkNo, message.getMessageFields().fileId);
+		
+		File chunkFile = new File(pathToPeerTemp + "/" + chunkId);
+		
+		if(chunkFile.exists())
+			return;
+		
+		this.remainingChunks--;
+		
+		try {
+			FileOutputStream output = new FileOutputStream(chunkFile);
+			
+			output.write(message.getChunk());
+			
+			output.close();
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		if(this.remainingChunks == 0) {
+			
+			
+			
+		}
 		
 		
 	}
