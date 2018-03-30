@@ -671,18 +671,14 @@ public class Peer implements Protocol {
 		
 		this.sendingChunks.remove(chunkId);
 		this.sendingChunks.put(chunkId, new Boolean(alreadySent));
-		
-		System.out.println("Putting sending of chunk " + chunkId + " to " + alreadySent);
-		
+				
 	}
 	
 	private synchronized void updateReceivingChunk(String chunkId, boolean received) {
 			
 		this.receivingChunks.remove(chunkId);
 		this.receivingChunks.put(chunkId, new Boolean(received));
-		
-		System.out.println("Putting receiving of chunk " + chunkId + " to " + received);
-		
+				
 	}
 	
 	
@@ -711,8 +707,6 @@ public class Peer implements Protocol {
 		ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
 		
 		int waitingTime = randomGenerator.nextInt(MAX_RANDOM_WAIT_TIME);
-		
-		System.out.println("Random Time: " + waitingTime);
 		
 		service.schedule(new Thread() {
 			
@@ -780,5 +774,13 @@ public class Peer implements Protocol {
 		return buffer;
 		
 	}
+	
+	
+	public void restore(String filePath) {
+		
+		
+		
+	}
+	
 
 }
