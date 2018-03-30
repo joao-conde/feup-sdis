@@ -43,6 +43,8 @@ public class Peer implements Protocol {
 	public final static char SEPARATOR = ' ';
 	public final static String STATE_FILE_NAME = "state";
 	public final static int PUT_CHUNK_DELAY = 15;
+	
+	public final static String STATE_FILES_FILE_NAME = "backedUpFiles";
 
 	public int id;
 	private Connection connection;
@@ -59,6 +61,8 @@ public class Peer implements Protocol {
 	
 	private HashMap<String, Boolean> sendingChunks = new HashMap<>();
 	private HashMap<String, Boolean> receivingChunks = new HashMap<>();
+	
+	private HashMap<String, String[]> fileMap = new HashMap<>();
 
 	private Registry registry;
 
@@ -296,6 +300,23 @@ public class Peer implements Protocol {
 				Peer.this.chunkMap.forEach(action);
 
 				pw.close();
+				PrintWriter pwf = new PrintWriter(new File(Peer.this.pathToPeer + "/" + STATE_FILES_FILE_NAME));
+				
+				
+				for(String fileId : fileMap.keySet()) {
+					
+					String[] values = fileMap.get(fileId);
+					
+					pwf.write(fileId);
+					pwf.write(SEPARATOR);
+					pwf.write(values[0]);
+					pwf.write(SEPARATOR);
+					pwf.write(values[1]);
+
+				}
+				
+				pwf.close();
+				
 
 				Peer.this.registry.unbind(Protocol.PROTOCOL + "-" + Peer.this.id);
 
@@ -322,10 +343,6 @@ public class Peer implements Protocol {
 			
 				peer.requestChunk("cef8c1533606122ea6bbcc20036f1aa778386c0d870242c0db3cf02c08e13604-1");
 		}
-
-		if(peer.id == 1 | peer.id == 3) peer.backup("pic.jpg", 1, "3/3/3");		
-
-		if(peer.id == 2) peer.delete("pic.jpg", "3/3/3");
 
 		peer.showServiceState();
 	}
@@ -629,6 +646,12 @@ public class Peer implements Protocol {
 			}
 			sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree, this.id);
 		}
+		
+		String[] fileInfo = new String[2];
+		fileInfo[0] = fileName;
+		fileInfo[1] = lastModifiedDate;
+		
+		fileMap.put(fileId, fileInfo);
 
 		file.delete();
 
@@ -668,6 +691,27 @@ public class Peer implements Protocol {
 				lineScanner.close();
 
 			}
+			
+			
+			scanner = new Scanner(new File(Peer.this.pathToPeer + "/" + STATE_FILES_FILE_NAME));
+			
+			while(scanner.hasNextLine()) {
+				
+				String line = scanner.nextLine();
+				
+				Scanner lineScanner = new Scanner(new InputStreamReader(new ByteArrayInputStream(line.getBytes())));
+				
+				String fileId = lineScanner.next();
+				String fileName = lineScanner.next();
+				String lastModifiedDate = lineScanner.next();
+				
+				fileMap.put(fileId, new String[] {fileName,lastModifiedDate});
+				
+				lineScanner.close();
+				
+			}
+			
+			
 
 			scanner.close();
 		} catch (FileNotFoundException e) {
