@@ -168,10 +168,10 @@ public class Peer implements Protocol {
 					
 				case CHUNK:
 					
-					updateSentChunk(ChunkInfo.buildChunkId(message.getMessageFields().chunkNo, message.getMessageFields().fileId),true); //chunk already sent
-					
 					String chunkId = ChunkInfo.buildChunkId(message.getMessageFields().chunkNo, message.getMessageFields().fileId);
 					Boolean expectingChunk = receivingChunks.get(chunkId);
+					updateSentChunk(ChunkInfo.buildChunkId(message.getMessageFields().chunkNo, message.getMessageFields().fileId),true); //chunk already sent
+					
 					
 					if(expectingChunk != null) {
 						
