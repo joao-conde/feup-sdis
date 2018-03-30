@@ -38,6 +38,7 @@ public class Peer implements Protocol {
 	public final static int STORED_WAIT_TIME = 400;
 	public final static int PUT_CHUNK_MAX_TIMES = 1;
 	public final static int INITIAL_PUT_CHUNK_WAIT_TIME = 1000;
+	public final static int KBYTES = 1000;
 	public final static String HASH_ALGORITHM = "SHA-256";
 	public final static char SEPARATOR = ' ';
 	public final static String STATE_FILE_NAME = "state";
@@ -678,9 +679,11 @@ public class Peer implements Protocol {
 	}
 
 	public void showRequestedBackupChunks(ArrayList<ChunkInfo> selfRequestedChunks){
-		System.out.println("Requested Backup Files");
+		
+		if(selfRequestedChunks.size() > 0)
+			System.out.println("Requested Backup Files");
+		
 		for(ChunkInfo chunkInfo: selfRequestedChunks){
-			//Path or name?
 			System.out.println("File path: " + "../res/peer-" + this.id + "/chunks/inbox");
 			System.out.println("File service ID: " + chunkInfo.fileId);
 			System.out.println("Desired replication degree: " + chunkInfo.desiredReplicationDegree);
@@ -696,11 +699,18 @@ public class Peer implements Protocol {
 	}
 
 	public void showStoredChunks(ArrayList<ChunkInfo> storedChunks){
-		System.out.println("Locally stored file chunks");
+		
+		if(storedChunks.size() > 0)
+			System.out.println("Locally stored file chunks");
+		
 		for(ChunkInfo chunkInfo: storedChunks){
 			//ID or No? TODO
-			System.out.println("Chunk ID: " + chunkInfo.chunkNo);
-			System.out.println("Chunk size: SIZE NOT IN CHUNK INFO" ); //TODO: add size to ChunkInfo
+			System.out.println("\nChunk ID: " + chunkInfo.chunkId);
+
+			File chunk = new File(this.pathToPeerChunks + '/' + chunkInfo.chunkId);
+			System.out.println(chunk.getPath());
+			System.out.println("Chunk size: " + chunk.length()/KBYTES + "KBytes"); 
+
 			System.out.println("Chunk replication degree: " + chunkInfo.replicationDegree);
 		}
 	}
@@ -719,7 +729,7 @@ public class Peer implements Protocol {
 		for (ChunkInfo chunkInfo : chunkMap.values()) {
 			
 			if(chunkInfo.fileId.equals(fileId))
-			fileChunks.add(chunkInfo);
+				fileChunks.add(chunkInfo);
 
 		}
 
