@@ -2,12 +2,12 @@ package backup;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.nio.file.Files;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -16,11 +16,12 @@ import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Random;
 import java.util.Scanner;
 
@@ -34,15 +35,16 @@ public class Peer implements Protocol {
 
 	public static float BACKUP_PROTOCOL_VERSION = 1.0f;
 	public final static int CHUNK_MAX_SIZE = 64000;
-	public final static int MESSAGE_MAX_SIZE = CHUNK_MAX_SIZE + 150;
-	public final static int STORED_WAIT_TIME = 400;
-	public final static int PUT_CHUNK_MAX_TIMES = 1;
+	public final static int MESSAGE_MAX_SIZE = CHUNK_MAX_SIZE + 100;
+	public final static int MAX_RANDOM_WAIT_TIME = 400;
+	public final static int PUT_CHUNK_MAX_TIMES = 5;
 	public final static int INITIAL_PUT_CHUNK_WAIT_TIME = 1000;
 	public final static int KBYTES = 1000;
 	public final static int MAX_STORAGE_SIZE = 200000; 
 	public final static String HASH_ALGORITHM = "SHA-256";
 	public final static char SEPARATOR = ' ';
 	public final static String STATE_FILE_NAME = "state";
+	public final static int PUT_CHUNK_DELAY = 15;
 
 	public int id;
 	private Connection connection;
@@ -56,6 +58,9 @@ public class Peer implements Protocol {
 	private String pathToPeerChunks;
 	private String pathToPeerReceivedFiles;
 	private CloseResources closeResources = new CloseResources();
+	
+	private HashMap<String, Boolean> sendingChunks = new HashMap<>();
+	private HashMap<String, Boolean> receivingChunks = new HashMap<>();
 
 	private Registry registry;
 
@@ -142,10 +147,8 @@ public class Peer implements Protocol {
 
 				case PUTCHUNK:
 					
-					registerMySavedChunk(this.message, false);
-
 					try {
-						int delay = randomGenerator.nextInt(STORED_WAIT_TIME);
+						int delay = randomGenerator.nextInt(MAX_RANDOM_WAIT_TIME);
 						Thread.sleep(delay);
 					} catch (InterruptedException e) {
 						e.printStackTrace();
@@ -160,12 +163,45 @@ public class Peer implements Protocol {
 					registerOtherSavedChunk(this.message);
 
 					break;
+									
+				case GETCHUNK:
+					
+					sendChunk(this.message);
+					
+					break;
+				
+					
+				case CHUNK:
+					
+					String chunkId = ChunkInfo.buildChunkId(message.getMessageFields().chunkNo, message.getMessageFields().fileId);
+					Boolean expectingChunk = receivingChunks.get(chunkId);
+					updateSentChunk(ChunkInfo.buildChunkId(message.getMessageFields().chunkNo, message.getMessageFields().fileId),true); //chunk already sent
+					
+					
+					if(expectingChunk != null) {
+						
+						if(expectingChunk) {
+							
+							System.out.println("I am expecting this chunk so i will save it");
+							updateReceivingChunk(chunkId, false);
+							updateSentChunk(chunkId, false);
+							break;
+							
+						}
+						
+			
+					}
+					
+					
+					System.out.println("I was not expecting this chunk so i am ignoring it");
+					break;
 
 				case DELETE:
 
 					deleteFileFromDisk(this.message.getMessageFields().fileId);
 
 					break;
+
 
 				default:
 					break;
@@ -281,6 +317,13 @@ public class Peer implements Protocol {
 		System.out.println("------ Peer " + args[0] + " INITIATED -------");
 
 		Runtime.getRuntime().addShutdownHook(new Thread(peer.closeResources));
+		
+		if(peer.id == 3) {
+			
+			if(peer.chunkMap.containsKey("cef8c1533606122ea6bbcc20036f1aa778386c0d870242c0db3cf02c08e13604-1"))
+			
+				peer.requestChunk("cef8c1533606122ea6bbcc20036f1aa778386c0d870242c0db3cf02c08e13604-1");
+		}
 
 		if(peer.id == 1 | peer.id == 3) peer.backup("pic.jpg", 1, "3/3/3");		
 
@@ -581,7 +624,7 @@ public class Peer implements Protocol {
 
 		for (int i = 0; i < chunks.size(); i++) {
 			try {
-				Thread.sleep(50);
+				Thread.sleep(PUT_CHUNK_DELAY);
 			} catch (InterruptedException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -634,6 +677,143 @@ public class Peer implements Protocol {
 		}
 
 	}
+	
+	private void requestChunk(String chunkId) {
+		
+		ChunkInfo chunkInfo = chunkMap.get(chunkId);
+		
+		try {
+			
+			Message message = Message.buildMessage(new MessageFields(MessageType.GETCHUNK, BACKUP_PROTOCOL_VERSION, id, chunkInfo.fileId, ChunkInfo.getChunkNo(chunkId)));
+			
+			this.connection.getMC().sendMessage(message);
+			
+			updateReceivingChunk(chunkId, true);
+			
+		
+		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
+	}
+	
+	private synchronized void updateSentChunk(String chunkId, boolean alreadySent) {
+		
+		this.sendingChunks.remove(chunkId);
+		this.sendingChunks.put(chunkId, new Boolean(alreadySent));
+				
+	}
+	
+	private synchronized void updateReceivingChunk(String chunkId, boolean received) {
+			
+		this.receivingChunks.remove(chunkId);
+		this.receivingChunks.put(chunkId, new Boolean(received));
+				
+	}
+	
+	
+	private void sendChunk(Message getChunkMessage) {
+		
+		String chunkId = ChunkInfo.buildChunkId(getChunkMessage.getMessageFields().chunkNo, getChunkMessage.getMessageFields().fileId);
+		
+		ChunkInfo chunk = chunkMap.get(chunkId);
+		
+		if(chunk == null) {
+			
+			updateSentChunk(chunkId, false);
+			return;
+		}
+			
+		
+		if(!chunk.seeds.contains(this.id)) {
+			
+			updateSentChunk(chunkId, false);
+			return;
+		}
+			
+		
+		updateSentChunk(chunkId, false);
+		
+		ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
+		
+		int waitingTime = randomGenerator.nextInt(MAX_RANDOM_WAIT_TIME);
+		
+		service.schedule(new Thread() {
+			
+			@Override
+			public void run() {
+				
+
+				if(Peer.this.sendingChunks.get(chunkId) == true) {
+					
+					updateSentChunk(chunkId, false);
+					return;
+				}
+					
+				
+				
+				
+				byte[] chunkBuffer = loadChunk(chunkId);
+				
+				
+				
+				try {
+					
+					Message chunkMessage = Message.buildMessage(new MessageFields(MessageType.CHUNK, BACKUP_PROTOCOL_VERSION, Peer.this.id, chunk.fileId, getChunkMessage.getMessageFields().chunkNo), chunkBuffer);
+					Peer.this.connection.getMDR().sendMessage(chunkMessage);
+					
+					System.out.println("Mandei chunk");
+					updateSentChunk(chunkId, false);
+					
+					
+				} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+				
+				
+				
+				
+				
+				
+			}
+			
+		}, waitingTime, TimeUnit.MILLISECONDS);
+		
+	}
+	
+	
+	private byte[] loadChunk(String chunkId) {
+		
+		File chunk = new File(pathToPeerChunks + "/" + chunkId); 
+		byte[] buffer = new byte[(int)chunk.length()];
+		
+		try {
+			
+			FileInputStream inputStream = new FileInputStream(chunk);
+			inputStream.read(buffer);
+			inputStream.close();
+			
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
+		return buffer;
+		
+	}
+	
+	
+	public void restore(String filePath) {
+		
+		
+		
+	}
+	
 
 
 	public void delete(String fileName, String lastModifiedDate){

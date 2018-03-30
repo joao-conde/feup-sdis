@@ -48,13 +48,7 @@ public class Client {
 				
 		String host = apComps[0];
 		String remoteObject = apComps[1];
-		
-		System.out.println(host);
-		System.out.println(remoteObject);
-		System.out.println(op1);
-		System.out.println(op2);
-		
-		
+				
 		try {
 			
 			registry = LocateRegistry.getRegistry(host);
