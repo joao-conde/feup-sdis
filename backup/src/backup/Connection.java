@@ -99,7 +99,7 @@ public class Connection {
 		
 		this.MC = new MulticastChannel(mcPort, mcAddress, "Control Channel");
 		this.MDB = new MulticastChannel(mdbPort, mdbAddress, "Data Backup Channel");
-		this.MDR = new MulticastChannel(mdrPort, mdrAddress, "Data Re");
+		this.MDR = new MulticastChannel(mdrPort, mdrAddress, "Data Recovery Channel");
 		
 	}
 
