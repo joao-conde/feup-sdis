@@ -22,7 +22,7 @@ public class Client {
 
 	public static void main(String[] args) {
 
-		if (args.length < 3) {
+		if (args.length < 2) {
 
 			System.out.println("Usage:\n\"<peer_ap> <sub_protocol> <opnd_1> <opnd_2>\n");
 			System.out.println("<peer_ap> - //host:port/name");
@@ -33,17 +33,20 @@ public class Client {
 
 		}
 
-		String accessPoint = args[0];
-		String protocol = args[1];
-		String op1 = args[2];
-		String op2 = args[3];
+			
 
-		new Client(accessPoint, protocol, op1, op2);
+		new Client(args);
 
 	}
 
-	public Client(String ap, String protocol, String op1, String op2) {
+	public Client(String[] args) {
 
+
+		String ap, protocol;
+
+		ap = args[0];
+		protocol = args[1];
+				
 		String[] apComps = ap.split("/");
 				
 		String host = apComps[0];
@@ -62,6 +65,8 @@ public class Client {
 			switch (subProtocol) {
 			case BACKUP:
 				
+				String op1 = args[2];
+				String op2 = args[3];
 				File file = new File(op1);
 				
 				this.sendData(op1);
@@ -78,6 +83,10 @@ public class Client {
 
 			case DELETE:
 				
+				break;
+
+			case STATE:
+				System.out.println(stub.showServiceState());
 				break;
 
 			default:
