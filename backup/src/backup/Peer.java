@@ -535,7 +535,7 @@ public class Peer implements Protocol {
 	}
 
 	
-	private ChunkInfo registerSentChunk(int chunkNo, String fileId, int desiredReplicationDegree,
+	private synchronized ChunkInfo registerSentChunk(int chunkNo, String fileId, int desiredReplicationDegree,
 			int peerId) {
 
 		ChunkInfo chunkInfo = chunkMap.get(ChunkInfo.buildChunkId(chunkNo, fileId));
@@ -555,7 +555,7 @@ public class Peer implements Protocol {
 	}
 
 	
-	private void registerMySavedChunk(Message putChunkMessage, boolean saved) {
+	private synchronized void registerMySavedChunk(Message putChunkMessage, boolean saved) {
 
 		String chunkId = ChunkInfo.buildChunkId(putChunkMessage.getMessageFields().chunkNo,
 				putChunkMessage.getMessageFields().fileId);
@@ -581,7 +581,7 @@ public class Peer implements Protocol {
 	}
 
 	
-	private void registerOtherSavedChunk(Message storedMessage) {
+	private synchronized void registerOtherSavedChunk(Message storedMessage) {
 
 		String chunkId = ChunkInfo.buildChunkId(storedMessage.getMessageFields().chunkNo,
 				storedMessage.getMessageFields().fileId);
@@ -777,7 +777,7 @@ public class Peer implements Protocol {
 	}
 
 	
-	private void updateSentChunk(String chunkId, boolean alreadySent) {
+	private synchronized void updateSentChunk(String chunkId, boolean alreadySent) {
 
 		this.sendingChunks.remove(chunkId);
 		this.sendingChunks.put(chunkId, new Boolean(alreadySent));
@@ -785,7 +785,7 @@ public class Peer implements Protocol {
 	}
 
 	
-	private void updateReceivingChunk(String chunkId, boolean received) {
+	private synchronized void updateReceivingChunk(String chunkId, boolean received) {
 
 		this.receivingChunks.remove(chunkId);
 		this.receivingChunks.put(chunkId, new Boolean(received));
