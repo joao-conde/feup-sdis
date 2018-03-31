@@ -48,7 +48,7 @@ public class Peer implements Protocol {
 	public final static int PUT_CHUNK_MAX_TIMES = 5;
 	public final static int INITIAL_PUT_CHUNK_WAIT_TIME = 1000;
 	public final static int KBYTES = 1000;
-	public final static int MAX_STORAGE_SIZE = 200000; 
+	public final static int MAX_STORAGE_SIZE = 10000000; 
 	public final static String HASH_ALGORITHM = "SHA-256";
 	public final static char SEPARATOR = ' ';
 	public final static String STATE_FILE_NAME = "state";
@@ -78,6 +78,8 @@ public class Peer implements Protocol {
 	private int remainingChunks;
 
 	private Registry registry;
+	
+	private long currentMaxChunkFolderSize;
 
 	public static class ChunkInfo {
 
@@ -166,7 +168,8 @@ public class Peer implements Protocol {
 						int delay = randomGenerator.nextInt(MAX_RANDOM_WAIT_TIME);
 						Thread.sleep(delay);
 					} catch (InterruptedException e) {
-						e.printStackTrace();
+						System.out.println(e.getLocalizedMessage());
+
 					}
 
 					sendStored(this.message);
@@ -197,12 +200,7 @@ public class Peer implements Protocol {
 						
 						if(expectingChunk) {
 							
-							System.out.println("I am expecting this chunk so i will save it");
-							
-							
-							processReceivedChunk(message);
-							
-							
+							processReceivedChunk(message);	
 							updateReceivingChunk(chunkId, false);
 							updateSentChunk(chunkId, false);
 							break;
@@ -212,8 +210,6 @@ public class Peer implements Protocol {
 			
 					}
 					
-					
-					System.out.println("I was not expecting this chunk so i am ignoring it");
 					break;
 
 				case DELETE:
@@ -231,7 +227,7 @@ public class Peer implements Protocol {
 			}
 
 			catch (NumberFormatException e) {
-				e.printStackTrace();
+				System.out.println(e.getLocalizedMessage());
 			}
 
 		}
@@ -341,6 +337,10 @@ public class Peer implements Protocol {
 				Peer.this.registry.unbind(Protocol.PROTOCOL + "-" + Peer.this.id);
 
 			} catch (FileNotFoundException | RemoteException | NotBoundException e) {
+			
+				System.out.println(e.getLocalizedMessage());
+
+			
 			}
 
 		}
@@ -386,6 +386,8 @@ public class Peer implements Protocol {
 		this.pathToPeerChunks = pathToPeer + "/chunks";
 		this.pathToPeerRestored = this.pathToPeer + "/restored";
 		this.pathToPeerTemp = this.pathToPeer + "/temp";
+		
+		this.currentMaxChunkFolderSize = MAX_STORAGE_SIZE;
 
 		new File(this.pathToPeerChunks).mkdirs();
 		new File(this.pathToPeerRestored).mkdir();
@@ -400,6 +402,7 @@ public class Peer implements Protocol {
 		}
 
 		catch (RemoteException e) {
+			System.out.println(e.getLocalizedMessage());
 		}
 
 		try {
@@ -410,7 +413,8 @@ public class Peer implements Protocol {
 
 		} catch (AlreadyBoundException | RemoteException e) {
 
-			e.printStackTrace();
+			System.out.println(e.getLocalizedMessage());
+
 		}
 
 	}
@@ -430,8 +434,8 @@ public class Peer implements Protocol {
 					putChunkMessage.getMessageFields().fileId, putChunkMessage.getMessageFields().chunkNo));
 			Peer.this.connection.getMC().sendMessage(reply);
 		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println(e.getLocalizedMessage());
+
 		}
 
 	}
@@ -442,8 +446,8 @@ public class Peer implements Protocol {
 			Message deleteMsg = Message.buildMessage(new MessageFields(MessageType.DELETE, BACKUP_PROTOCOL_VERSION, this.id, fileId));
 			Peer.this.connection.getMC().sendMessage(deleteMsg);
 		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println(e.getLocalizedMessage());
+
 		}
 
 	}
@@ -483,15 +487,11 @@ public class Peer implements Protocol {
 						try {
 							Thread.sleep(waitingTime);
 						} catch (InterruptedException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
+							System.out.println(e.getLocalizedMessage());
+
 						}
 
 						this.waitingTime *= 2;
-
-						System.out.println("Next desired replication degree: " + desiredReplicationDegree);
-						System.out.println("Current desired replication degree: " + chunkInfo.desiredReplicationDegree);
-						System.out.println("Current replication degree: " + chunkInfo.replicationDegree);
 
 						if (Peer.PUT_CHUNK_MAX_TIMES < counter)
 							continueLoop = false;
@@ -515,7 +515,8 @@ public class Peer implements Protocol {
 					while (continueLoop);
 
 				} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
-					e.printStackTrace();
+					System.out.println(e.getLocalizedMessage());
+
 				}
 
 			}
@@ -524,8 +525,6 @@ public class Peer implements Protocol {
 
 		Thread putChunk = new Thread(new PutChunk(desiredReplicationDegree));
 		putChunk.start();
-
-		System.out.println("Creating Thread for chunk " + chunkNo + "date: " + System.currentTimeMillis());
 
 	}
 
@@ -592,11 +591,6 @@ public class Peer implements Protocol {
 		else
 			chunkInfo.addPeer(storedMessage.getMessageFields().senderId);
 
-		if (chunkInfo.replicationDegree == chunkInfo.desiredReplicationDegree) {
-			System.out.println("Chunk " + chunkInfo.chunkId + " has reached the desired replication degree ("
-					+ chunkInfo.replicationDegree + ")");
-		}
-
 	}
 
 	private void saveChunkToDisk(Message msg) {
@@ -604,12 +598,16 @@ public class Peer implements Protocol {
 		String chunkId = ChunkInfo.buildChunkId(msg.getMessageFields().chunkNo, msg.getMessageFields().fileId);
 
 		ChunkInfo chunkInfo = chunkMap.get(chunkId);
+		
+		
+		long chunksFolderSize = Utils.calculateFolderSize(pathToPeerChunks);
+		
 
 		Boolean save = true;
 
 		if (chunkInfo != null) {
 			if (chunkInfo.replicationDegree >= msg.getMessageFields().replicationDegree
-					|| chunkInfo.seeds.contains(this.id))
+					|| chunkInfo.seeds.contains(this.id) || chunksFolderSize + msg.getChunk().length > this.currentMaxChunkFolderSize)
 				save = false;
 		}
 
@@ -625,34 +623,16 @@ public class Peer implements Protocol {
 				stream.write(msg.getChunk());
 				stream.close();
 
-			} catch (Exception e) {
-				e.printStackTrace();
+			} catch (IOException e) {
+				System.out.println(e.getLocalizedMessage());
 			}
 
 		}
 
 	}
 
-//	public void receiveData(String fileName, int length, byte[] buffer) {
-//
-//		File file = new File(this.pathToPeerReceivedFiles + "/" + fileName);
-//
-//		try {
-//
-//			FileOutputStream output = new FileOutputStream(file, true);
-//
-//			output.write(buffer, 0, length);
-//
-//			output.close();
-//
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//
-//	}
 
-	public void backup(String filePath, int desiredReplicationDegree) {
+	public String backup(String filePath, int desiredReplicationDegree) {
 
 		File file = new File(filePath);
 		
@@ -673,8 +653,8 @@ public class Peer implements Protocol {
 				try {
 					Thread.sleep(PUT_CHUNK_DELAY);
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+					System.out.println(e.getLocalizedMessage());
+
 				}
 				sendPutChunk(fileId, chunks.get(i), i + 1, desiredReplicationDegree, this.id);
 			}
@@ -685,12 +665,16 @@ public class Peer implements Protocol {
 			fileInfo[2] = Integer.toString(chunks.size());
 			
 			fileMap.put(fileId, fileInfo);
-		
+			
 		
 		} catch (IOException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
+			
+			return "Could not backup file, file '" + filePath + "' not found";
+			
 		}
+		
+		return "File '" + file.getName() + "successfully restored";
+
 		
 		
 
@@ -774,8 +758,8 @@ public class Peer implements Protocol {
 			
 		
 		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println(e.getLocalizedMessage());
+
 		}
 		
 		
@@ -846,13 +830,12 @@ public class Peer implements Protocol {
 					Message chunkMessage = Message.buildMessage(new MessageFields(MessageType.CHUNK, BACKUP_PROTOCOL_VERSION, Peer.this.id, chunk.fileId, getChunkMessage.getMessageFields().chunkNo), chunkBuffer);
 					Peer.this.connection.getMDR().sendMessage(chunkMessage);
 					
-					System.out.println("Mandei chunk");
 					updateSentChunk(chunkId, false);
 					
 					
 				} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+					System.out.println(e.getLocalizedMessage());
+
 				}
 				
 				
@@ -880,8 +863,8 @@ public class Peer implements Protocol {
 			
 			
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println(e.getLocalizedMessage());
+
 		}
 		
 		
@@ -890,12 +873,15 @@ public class Peer implements Protocol {
 	}
 	
 	
-	public void restore(String fileName) {
+	public String restore(String fileName) {
 		
 		String fileId = findBackedUpFileId(fileName);
 		
-		if(fileId == null)
-			return;
+		if(fileId == null) {
+			
+			return "Could not restore file, file '" + fileName + "' not found"; 
+		}
+			
 		
 		String[] fileInfo = fileMap.get(fileId);
 		
@@ -913,7 +899,7 @@ public class Peer implements Protocol {
 			
 		}
 		
-		
+		return "File '" + fileName + "successfully restored";
 		
 	}
 	
@@ -941,8 +927,8 @@ public class Peer implements Protocol {
 			output.close();
 			
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println(e.getLocalizedMessage());
+
 		}
 		
 		if(this.remainingChunks == 0) {
@@ -973,13 +959,19 @@ public class Peer implements Protocol {
 		return result;
 	}
 
-	public void delete(String fileName){
+	public String delete(String fileName){
 		String fileIdToDelete = findBackedUpFileId(fileName);
 
-		if(fileIdToDelete == null) return;
+		if(fileIdToDelete == null) {
+			return "Could not delete file, file '" + fileName + "' not found";
+		}
 		
 		sendDelete(fileIdToDelete);
 		deleteFileFromDisk(fileIdToDelete);
+		
+		return "File '" + fileName + "successfully deleted";
+		
+		
 	}
 
 	public void deleteFileFromDisk(String fileIdToDelete){

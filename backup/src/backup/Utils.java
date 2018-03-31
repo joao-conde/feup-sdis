@@ -2,7 +2,6 @@ package backup;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -34,8 +33,8 @@ public class Utils {
 			}
 
 		} catch (NoSuchAlgorithmException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println(e.getLocalizedMessage());
+
 		}
 
 		return fileId;
@@ -72,12 +71,10 @@ public class Utils {
 
 			}
 
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			
+			System.out.println(e.getLocalizedMessage());
+			
 		}
 
 		return chunks;
@@ -112,10 +109,34 @@ public class Utils {
 			out.close();
 
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.out.println(e.getLocalizedMessage());
+
 		}
 		
 	}
-
+	
+	public static long calculateFolderSize(String folderName) {
+		
+		File folder = new File(folderName);
+		
+		if(!folder.isDirectory())
+			return -1;
+		
+		File[] files = folder.listFiles();
+		
+		long result = 0;
+		
+		for(File file : files) {
+			
+			if(!file.isDirectory())
+				result += file.length();
+			
+		}
+		
+		
+		return result;
+		
+	}
+	
+	
 }

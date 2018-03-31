@@ -1,6 +1,8 @@
 package backup;
 
 import java.io.File;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 
@@ -18,7 +20,7 @@ public class Client {
 		if (args.length < 2) {
 
 			System.out.println("Usage:\n\"<peer_ap> <sub_protocol> <opnd_1> <opnd_2>\n");
-			System.out.println("<peer_ap> - //host:port/name");
+			System.out.println("<peer_ap> - host/peer-n");
 			System.out.println("<sub_protocol> - BACKUP | RESTORE | DELETE | RECLAIM | STATE");
 			System.out.println("<opnd_1> - file_name (backup, restore, delete) | Space to reclaim (reclaim)");
 			System.out.println("<opnd_2> - replication degree (for backup sub_protocol)");
@@ -62,7 +64,7 @@ public class Client {
 				//this.sendData(op1);
 				
 						
-				stub.backup(op1, Integer.parseInt(op2));
+				System.out.println(stub.backup(op1, Integer.parseInt(op2)));
 								
 				break;
 
@@ -70,7 +72,7 @@ public class Client {
 				op1 = args[2];
 				File fileToDelete = new File(op1);
 
-				stub.delete(fileToDelete.getName());
+				System.out.println(stub.delete(fileToDelete.getName()));
 
 				break;
 
@@ -81,7 +83,7 @@ public class Client {
 			case RESTORE:
 				
 				op1 = args[2];				
-				stub.restore(op1);
+				System.out.println(stub.restore(op1));
 				
 				break;
 
@@ -90,46 +92,11 @@ public class Client {
 			}
 			
 			
-		} catch (Exception e) {
-			System.err.println("Client exception: " + e.toString());
-			e.printStackTrace();
+		} catch (RemoteException | NumberFormatException | NotBoundException e) {
+			System.out.println(e.getLocalizedMessage());
+
 		}
 
 	}
 	
-//	private void sendData(String filePath) {
-//		
-//		File file = new File(filePath);
-//		
-//		try {
-//			
-//			FileInputStream input = new FileInputStream(file);
-//			
-//			
-//			byte[] buffer = new byte[RMI_CHUNK];
-//			
-//			int bytesRead;
-//
-//			while((bytesRead = input.read(buffer)) > 0) {
-//				
-//				stub.receiveData(file.getName(), bytesRead, buffer);
-//
-//			}
-//			
-//
-//
-//
-//			input.close();
-//			
-//						
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//		
-//		
-//	}
-	
-	
-
 }

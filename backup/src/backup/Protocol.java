@@ -7,7 +7,7 @@ import java.util.Arrays;
 
 public interface Protocol extends Remote {
 	
-	public static final String PROTOCOL = "protocol";
+	public static final String PROTOCOL = "peer";
 	public static enum SUB_PROTOCOL_TYPE {
 		
 		BACKUP("BACKUP"),
@@ -48,8 +48,8 @@ public interface Protocol extends Remote {
 	}
 	
 	//void receiveData(String fileName, int length, byte[] buffer) throws RemoteException;
-    void backup(String filePath, int replicationDegree) throws RemoteException;
-	void delete(String fileName) throws RemoteException;
+    String backup(String filePath, int replicationDegree) throws RemoteException;
+	String delete(String fileName) throws RemoteException;
 	String showServiceState() throws RemoteException;
-	void restore(String fileName) throws RemoteException;
+	String restore(String fileName) throws RemoteException;
 }

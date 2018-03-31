@@ -275,28 +275,29 @@ public class Message {
 
 	private static byte[][] splitMessage(byte[] message) {
 		
-		
-		
-		int lfFound = 0;
 		int index;
+		
+		int foundIndex = 0;
 		
 		for(index = 0; index < message.length; index++) {
 			
-			if(message[index] == LF)
-				lfFound++;
-			if(lfFound == 2)
+			if(message[index] == CR && message[index+1] == LF && message[index+2] == CR && message[index+3] == LF) {
+				foundIndex = index + 3;
 				break;
+			}
+				
+			
 		}
 		
 		byte[][] result = new byte[2][];
 		result[0] = new byte[message.length];
 		
-		int chunkSize = message.length - index-1;
+		int chunkSize = message.length - foundIndex-1;
 		
 		result[1] = new byte[chunkSize];
 		
-		System.arraycopy(message, 0, result[0],0 , index);
-		System.arraycopy(message, index+1, result[1], 0, chunkSize);
+		System.arraycopy(message, 0, result[0],0 , foundIndex);
+		System.arraycopy(message, foundIndex+1, result[1], 0, chunkSize);
 		
 		
 		
