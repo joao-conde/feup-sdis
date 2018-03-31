@@ -941,6 +941,8 @@ public class Peer implements Protocol {
 		
 		if(this.remainingChunks == 0) {
 			
+			System.out.println("entrei no merge chunks");
+			
 			Utils.mergeChunks(pathToPeerRestored + "/" + fileName, tempFolder, message.getMessageFields().fileId);
 			
 			
