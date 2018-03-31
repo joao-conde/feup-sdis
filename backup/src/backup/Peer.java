@@ -602,6 +602,8 @@ public class Peer implements Protocol {
 		
 		long chunksFolderSize = Utils.calculateFolderSize(pathToPeerChunks);
 		
+		System.out.println("Folder size: " + chunksFolderSize);
+		
 
 		Boolean save = true;
 
