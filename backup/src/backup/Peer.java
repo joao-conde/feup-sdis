@@ -937,6 +937,8 @@ public class Peer implements Protocol {
 
 		}
 		
+		System.out.println(this.remainingChunks);
+		
 		if(this.remainingChunks == 0) {
 			
 			Utils.mergeChunks(pathToPeerRestored + "/" + fileName, tempFolder, message.getMessageFields().fileId);
