@@ -606,7 +606,7 @@ public class Peer implements Protocol {
 		
 		System.out.println("Chunk Size: " + msg.getChunk().length);
 		
-		System.out.println("Sum: " + chunksFolderSize + msg.getChunk().length);
+		System.out.println("Sum: " + (chunksFolderSize + msg.getChunk().length));
 		
 
 		Boolean save = true;
@@ -679,7 +679,7 @@ public class Peer implements Protocol {
 			
 		}
 		
-		return "File '" + file.getName() + " successfully restored";
+		return "File '" + file.getName() + " successfully backed up";
 
 		
 		
