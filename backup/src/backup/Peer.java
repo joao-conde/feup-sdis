@@ -613,7 +613,7 @@ public class Peer implements Protocol {
 
 		if (chunkInfo != null) {
 			if (chunkInfo.replicationDegree >= msg.getMessageFields().replicationDegree
-					|| chunkInfo.seeds.contains(this.id) || chunksFolderSize + msg.getChunk().length > this.currentMaxChunkFolderSize)
+					|| chunkInfo.seeds.contains(this.id) /* || chunksFolderSize + msg.getChunk().length > this.currentMaxChunkFolderSize*/)
 				save = false;
 		}
 
