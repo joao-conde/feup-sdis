@@ -419,7 +419,7 @@ public class Peer implements Protocol {
 
 	}
 
-	private void sendStored(Message putChunkMessage) {
+	private synchronized void sendStored(Message putChunkMessage) {
 
 		saveChunkToDisk(putChunkMessage);
 
