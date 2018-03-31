@@ -593,7 +593,7 @@ public class Peer implements Protocol {
 
 	}
 
-	private void saveChunkToDisk(Message msg) {
+	private synchronized void saveChunkToDisk(Message msg) {
 
 		String chunkId = ChunkInfo.buildChunkId(msg.getMessageFields().chunkNo, msg.getMessageFields().fileId);
 
@@ -673,7 +673,7 @@ public class Peer implements Protocol {
 			
 		}
 		
-		return "File '" + file.getName() + "successfully restored";
+		return "File '" + file.getName() + " successfully restored";
 
 		
 		
@@ -899,7 +899,7 @@ public class Peer implements Protocol {
 			
 		}
 		
-		return "File '" + fileName + "successfully restored";
+		return "File '" + fileName + " successfully restored";
 		
 	}
 	
@@ -969,7 +969,7 @@ public class Peer implements Protocol {
 		sendDelete(fileIdToDelete);
 		deleteFileFromDisk(fileIdToDelete);
 		
-		return "File '" + fileName + "successfully deleted";
+		return "File '" + fileName + " successfully deleted";
 		
 		
 	}
