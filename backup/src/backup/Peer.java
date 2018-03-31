@@ -634,6 +634,9 @@ public class Peer implements Protocol {
 			}
 
 		}
+		
+		else 
+			System.out.println("Not saving");
 
 	}
 
