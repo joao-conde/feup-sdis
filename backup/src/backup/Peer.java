@@ -236,7 +236,7 @@ public class Peer implements Protocol {
 
 	private class Dispatcher implements Runnable {
 
-		private ExecutorService threadPool = Executors.newFixedThreadPool(1000);
+		private ExecutorService threadPool = Executors.newFixedThreadPool(500);
 
 		public MulticastChannel multicastChannel;
 
