@@ -194,7 +194,7 @@ public class Peer implements Protocol {
 
 				case CHUNK:
 
-					System.out.println("Received cHunk");
+					System.out.println("Received Chunk");
 
 					String chunkId = ChunkInfo.buildChunkId(message.getMessageFields().chunkNo,
 							message.getMessageFields().fileId);
@@ -230,6 +230,13 @@ public class Peer implements Protocol {
 				case DELETE:
 
 					deleteFileFromDisk(this.message.getMessageFields().fileId);
+
+					break;
+
+
+				case REMOVED:
+					
+
 
 					break;
 
@@ -454,6 +461,23 @@ public class Peer implements Protocol {
 
 	}
 
+
+	private void sendRemoved(String chunkID) {
+		String[] args = chunkID.split("-");
+
+		try {
+			Message removedMsg = Message
+					.buildMessage(new MessageFields(MessageType.REMOVED, BACKUP_PROTOCOL_VERSION, this.id, 
+							args[0], Integer.parseInt(args[1])));
+
+
+			Peer.this.connection.getMC().sendMessage(removedMsg);
+		} catch (NumberFormatException | ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
 	
 	private void sendPutChunk(String fileId, byte[] chunk, int chunkNo, int desiredReplicationDegree, int peerId) {
 
@@ -621,7 +645,7 @@ public class Peer implements Protocol {
 
 		if (chunkInfo != null) {
 			if (chunkInfo.replicationDegree >= msg.getMessageFields().replicationDegree || chunkInfo.seeds
-					.contains(this.id) /*
+					.contains(this.id) /* TODO:
 										 * || chunksFolderSize + msg.getChunk().length > this.currentMaxChunkFolderSize
 										 */)
 				save = false;
@@ -984,10 +1008,7 @@ public class Peer implements Protocol {
 
 			}
 			
-			
-			
-			
-
+		
 		}
 
 	}
@@ -1147,7 +1168,7 @@ public class Peer implements Protocol {
 			storedSize += chunk.length();
 		}
 
-		out.println("\nPeer storage maximum capacity: " + MAX_STORAGE_SIZE + " KBytes");
+		out.println("\nPeer storage maximum capacity: " + this.currentMaxChunkFolderSize + " KBytes");
 		out.println("\nPeer used space (stored chunks size): " + storedSize / KBYTES + " KBytes");
 
 		out.close();
@@ -1166,6 +1187,78 @@ public class Peer implements Protocol {
 		}
 
 		return fileChunks;
+	}
+
+
+	public String reclaim(int maximumDiskSpace){
+
+		maximumDiskSpace *= KBYTES;
+
+		if(maximumDiskSpace > this.currentMaxChunkFolderSize){
+			this.currentMaxChunkFolderSize = maximumDiskSpace;
+			return "Space available for storage increased";
+		}
+
+		if(maximumDiskSpace == this.currentMaxChunkFolderSize){
+			return "Desired disk space is the same as the one currently used";
+		}
+		 
+		//reaching here means maximumDiskSpace < currentMaxDiskSpace
+
+		long chunksLength = Utils.calculateFolderSize(this.pathToPeerChunks);
+
+		if(maximumDiskSpace >= chunksLength){
+			this.currentMaxChunkFolderSize = maximumDiskSpace;
+			return "Space decreased but chunks still fit";
+		}
+
+		//reaching here means there is no space for all the chunks
+
+		long spaceToFree = chunksLength - maximumDiskSpace;
+		long spaceFreed = 0;
+
+
+		while(spaceFreed < spaceToFree){
+			String chunkID = getBiggestChunk();
+
+			if(chunkID.equals(""))
+				return "No more chunks to remove";
+
+			File chunk = new File(this.pathToPeerChunks + '/' + chunkID);
+
+			spaceFreed += chunk.length();
+			sendRemoved(chunkID);
+			chunk.delete();
+			
+		}
+		
+		return "END " + spaceToFree + "|" + spaceFreed;
+	}
+
+
+	public String getBiggestChunk(){
+
+		String[] chunks = new File(this.pathToPeerChunks).list();
+		
+		if(chunks.length == 0)
+			return "";
+
+
+		String biggestChunkID = "";
+		long biggestChunkSize = 0;
+
+		for(String chunkID: chunks){
+			File chunk = new File(this.pathToPeerChunks + "/" + chunkID);
+
+			if(chunk.length() > biggestChunkSize){
+				biggestChunkID = chunkID;
+			}
+
+			if(biggestChunkSize == this.CHUNK_MAX_SIZE)
+				break;
+		}
+
+		return biggestChunkID;
 	}
 
 }

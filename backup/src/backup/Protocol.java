@@ -52,4 +52,5 @@ public interface Protocol extends Remote {
 	String delete(String fileName) throws RemoteException;
 	String showServiceState() throws RemoteException;
 	String restore(String fileName) throws RemoteException;
+	String reclaim(int maximumDiskSpace) throws RemoteException;
 }

@@ -87,6 +87,12 @@ public class Client {
 				
 				break;
 
+			case RECLAIM:
+
+				op1 = args[2];
+				System.out.println(stub.reclaim(Integer.parseInt(op1)));
+				break;
+
 			default:
 				break;
 			}
