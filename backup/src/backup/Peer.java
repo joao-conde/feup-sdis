@@ -1252,6 +1252,8 @@ public class Peer implements Protocol {
 			sendRemoved(chunkID);
 			chunk.delete();			
 		}
+
+		this.currentMaxChunkFolderSize = maximumDiskSpace;
 		
 		return "END " + spaceToFree + "|" + spaceFreed;
 	}
