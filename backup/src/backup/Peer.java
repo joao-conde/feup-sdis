@@ -168,6 +168,9 @@ public class Peer implements Protocol {
 
 				case PUTCHUNK:
 
+					if(fileMap.get(message.getMessageFields().fileId) != null)
+						return;
+
 					try {
 						int delay = randomGenerator.nextInt(MAX_RANDOM_WAIT_TIME);
 						Thread.sleep(delay);
@@ -236,7 +239,7 @@ public class Peer implements Protocol {
 
 				case REMOVED:
 					
-
+					updateReplicationDegree(this.message);
 
 					break;
 
@@ -476,6 +479,25 @@ public class Peer implements Protocol {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+	}
+
+
+	public synchronized void updateReplicationDegree(Message removedMessage){
+
+		MessageFields fields = removedMessage.getMessageFields();
+		String chunkID = ChunkInfo.buildChunkId(fields.chunkNo, fields.fileId);
+
+		ChunkInfo chunkInfo = chunkMap.get(chunkID);
+
+		chunkInfo.replicationDegree--;	
+
+		if(chunkInfo.replicationDegree < chunkInfo.desiredReplicationDegree){
+
+			sendPutChunk(chunkInfo.fileId, removedMessage.getChunk(), chunkInfo.chunkNo, 
+						chunkInfo.desiredReplicationDegree, this.id);
+
+		}
+		
 	}
 
 	
@@ -1168,7 +1190,7 @@ public class Peer implements Protocol {
 			storedSize += chunk.length();
 		}
 
-		out.println("\nPeer storage maximum capacity: " + this.currentMaxChunkFolderSize + " KBytes");
+		out.println("\nPeer storage maximum capacity: " + this.currentMaxChunkFolderSize / KBYTES + " KBytes");
 		out.println("\nPeer used space (stored chunks size): " + storedSize / KBYTES + " KBytes");
 
 		out.close();
@@ -1228,8 +1250,7 @@ public class Peer implements Protocol {
 
 			spaceFreed += chunk.length();
 			sendRemoved(chunkID);
-			chunk.delete();
-			
+			chunk.delete();			
 		}
 		
 		return "END " + spaceToFree + "|" + spaceFreed;
