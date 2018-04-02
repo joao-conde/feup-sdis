@@ -417,7 +417,7 @@ public class Peer implements Protocol {
 	
 		Peer peer = new Peer(args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8]);
 
-		System.out.println("------ Peer " + args[0] + " INITIATED -------");
+		System.out.println("------ Peer " + args[1] + " INITIATED -------");
 
 		Runtime.getRuntime().addShutdownHook(new Thread(peer.closeResources));
 
