@@ -25,7 +25,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -48,11 +47,11 @@ public class Peer implements Protocol {
 	public final static int PUT_CHUNK_MAX_TIMES = 5;
 	public final static int INITIAL_PUT_CHUNK_WAIT_TIME = 1000;
 	public final static int KBYTES = 1000;
-	public final static int MAX_STORAGE_SIZE = 10000000;
+	public final static int MAX_STORAGE_SIZE_KB = 2000;
 	public final static String HASH_ALGORITHM = "SHA-256";
 	public final static char SEPARATOR = ' ';
 	public final static String STATE_FILE_NAME = "state";
-	public final static int PUT_CHUNK_DELAY = 10;
+	public final static int PUT_CHUNK_DELAY = 20;
 
 	public final static String STATE_FILES_FILE_NAME = "backedUpFiles";
 
@@ -76,6 +75,7 @@ public class Peer implements Protocol {
 	private HashMap<String, String[]> fileMap = new HashMap<>();
 	
 	private ExecutorService threadPool = Executors.newFixedThreadPool(100);
+	private ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
 
 	private Registry registry;
 
@@ -177,24 +177,28 @@ public class Peer implements Protocol {
 					}
 
 					sendStored(this.message);
+					
+					
 
 					break;
 
 				case STORED:
 
 					registerOtherSavedChunk(this.message);
+					
+					
 
 					break;
 
 				case GETCHUNK:
 
 					sendChunk(this.message);
-
+					
+					
+					
 					break;
 
 				case CHUNK:
-
-					System.out.println("Received cHunk");
 
 					String chunkId = ChunkInfo.buildChunkId(message.getMessageFields().chunkNo,
 							message.getMessageFields().fileId);
@@ -216,15 +220,8 @@ public class Peer implements Protocol {
 
 						}
 						
-						else
-							System.out.println("Not expecing chunk");
-
 					}
 					
-					else
-						System.out.println("Not expecting Chunk");
-					
-
 					break;
 
 				case DELETE:
@@ -277,7 +274,7 @@ public class Peer implements Protocol {
 				}
 
 				Runnable handler = new MessageHandler(buffer, this.multicastChannel);
-
+								
 				threadPool.execute(handler);
 
 			}
@@ -294,40 +291,49 @@ public class Peer implements Protocol {
 
 			try {
 
-				PrintWriter pw = new PrintWriter(new File(Peer.this.pathToPeer + "/" + STATE_FILE_NAME));
+				File stateFile = new File(Peer.this.pathToPeer + "/" + STATE_FILE_NAME);
+				
+				if(stateFile.exists())
+					stateFile.delete();
+				
+				
+				
+				PrintWriter pw = new PrintWriter(stateFile);
+				
+				
+				for(String chunkId: Peer.this.chunkMap.keySet()) {
+					
+					String[] comp = chunkId.split("-");
+					ChunkInfo chunkInfo = chunkMap.get(chunkId);
 
-				BiConsumer<String, ChunkInfo> action = new BiConsumer<String, Peer.ChunkInfo>() {
-
-					@Override
-					public void accept(String chunkId, ChunkInfo chunkInfo) {
-
-						String[] comp = chunkId.split("-");
-
-						pw.print(comp[1]);
+					pw.print(comp[1]);
+					pw.print(SEPARATOR);
+					pw.print(chunkInfo.replicationDegree);
+					pw.print(SEPARATOR);
+					for (Integer i : chunkInfo.seeds) {
+						pw.print(i);
 						pw.print(SEPARATOR);
-						pw.print(chunkInfo.replicationDegree);
-						pw.print(SEPARATOR);
-						for (Integer i : chunkInfo.seeds) {
-							pw.print(i);
-							pw.print(SEPARATOR);
-
-						}
-
-						pw.print(SEPARATOR);
-						pw.print(chunkInfo.desiredReplicationDegree);
-						pw.print(SEPARATOR);
-						pw.print(chunkInfo.fileId);
-						pw.print(SEPARATOR);
-						pw.println(chunkInfo.backupInitiatorPeer);
 
 					}
 
-				};
-
-				Peer.this.chunkMap.forEach(action);
+					pw.print(SEPARATOR);
+					pw.print(chunkInfo.desiredReplicationDegree);
+					pw.print(SEPARATOR);
+					pw.print(chunkInfo.fileId);
+					pw.print(SEPARATOR);
+					pw.println(chunkInfo.backupInitiatorPeer);
+					
+				}
+				
 
 				pw.close();
-				PrintWriter pwf = new PrintWriter(new File(Peer.this.pathToPeer + "/" + STATE_FILES_FILE_NAME));
+				
+				File filesStatusFile = new File(Peer.this.pathToPeer + "/" + STATE_FILES_FILE_NAME);
+				
+				if(filesStatusFile.exists())
+					filesStatusFile.delete();
+				
+				PrintWriter pwf = new PrintWriter(filesStatusFile);
 
 				for (String fileId : fileMap.keySet()) {
 
@@ -369,7 +375,7 @@ public class Peer implements Protocol {
 
 	
 	public Peer(int id) {
-
+		
 		this.id = id;
 
 		connection = new Connection("224.0.0.1", 2300, "224.0.0.2", 2301, "224.0.0.3", 2302);
@@ -389,7 +395,7 @@ public class Peer implements Protocol {
 		this.pathToPeerRestored = this.pathToPeer + "/restored";
 		this.pathToPeerTemp = this.pathToPeer + "/temp";
 
-		this.currentMaxChunkFolderSize = MAX_STORAGE_SIZE;
+		this.currentMaxChunkFolderSize = MAX_STORAGE_SIZE_KB * KBYTES;
 
 		new File(this.pathToPeerChunks).mkdirs();
 		new File(this.pathToPeerRestored).mkdir();
@@ -437,7 +443,7 @@ public class Peer implements Protocol {
 			System.out.println(e.getLocalizedMessage());
 
 		}
-
+		
 	}
 
 	
@@ -473,20 +479,43 @@ public class Peer implements Protocol {
 			public void run() {
 
 				int counter = 0;
-				boolean continueLoop = true;
 
 				try {
 					this.message = Message.buildMessage(new Message.MessageFields(MessageType.PUTCHUNK,
 							BACKUP_PROTOCOL_VERSION, Peer.this.id, fileId, chunkNo, desiredReplicationDegree), chunk);
 
-					do {
-
+					
+					while(true) {
+						
 						Peer.this.connection.getMDB().sendMessage(message);
+						
+						System.out.println("Attempt number: " + (++counter));
 
 						chunkInfo = registerSentChunk(chunkNo, fileId, desiredReplicationDegree, peerId);
 
-						System.out.println("Attempt " + ++counter + "\n");
+						
 
+						if (counter >= Peer.PUT_CHUNK_MAX_TIMES ) {
+							
+							System.out.println("Max number of tries reached: giving up on chunk " + chunkNo);
+							break;
+						}
+							
+
+						else {
+
+							if (chunkInfo.replicationDegree >= chunkInfo.desiredReplicationDegree) {
+
+								if (desiredReplicationDegree == chunkInfo.desiredReplicationDegree) {
+
+									break;
+
+								}
+
+							}
+
+						}
+						
 						try {
 							Thread.sleep(waitingTime);
 						} catch (InterruptedException e) {
@@ -496,26 +525,44 @@ public class Peer implements Protocol {
 
 						this.waitingTime *= 2;
 
-						if (Peer.PUT_CHUNK_MAX_TIMES < counter)
-							continueLoop = false;
-
-						else {
-
-							if (chunkInfo.replicationDegree >= chunkInfo.desiredReplicationDegree) {
-
-								if (desiredReplicationDegree == chunkInfo.desiredReplicationDegree) {
-
-									continueLoop = false;
-
-								}
-
-							}
-
-						}
-
 					}
-
-					while (continueLoop);
+						
+					
+//					do {
+//
+//						Peer.this.connection.getMDB().sendMessage(message);
+//
+//						chunkInfo = registerSentChunk(chunkNo, fileId, desiredReplicationDegree, peerId);
+//
+//						try {
+//							Thread.sleep(waitingTime);
+//						} catch (InterruptedException e) {
+//							System.out.println(e.getLocalizedMessage());
+//
+//						}
+//
+//						this.waitingTime *= 2;
+//
+//						if (Peer.PUT_CHUNK_MAX_TIMES < counter)
+//							continueLoop = false;
+//
+//						else {
+//
+//							if (chunkInfo.replicationDegree >= chunkInfo.desiredReplicationDegree) {
+//
+//								if (desiredReplicationDegree == chunkInfo.desiredReplicationDegree) {
+//
+//									continueLoop = false;
+//
+//								}
+//
+//							}
+//
+//						}
+//
+//					}
+//
+//					while (continueLoop);
 
 				} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
 					System.out.println(e.getLocalizedMessage());
@@ -526,9 +573,6 @@ public class Peer implements Protocol {
 
 		}
 
-//		PutChunk threadPutChunk = new PutChunk(desiredReplicationDegree);
-//		threadPool.execute(threadPutChunk);
-		
 		new Thread(new PutChunk(desiredReplicationDegree)).start();
 		
 
@@ -577,6 +621,7 @@ public class Peer implements Protocol {
 
 		// ALWAYS UPDATE THE DESIRED REPLICATION DEGREE
 		chunkInfo.desiredReplicationDegree = putChunkMessage.getMessageFields().replicationDegree;
+		chunkInfo.backupInitiatorPeer = putChunkMessage.getMessageFields().senderId;
 
 	}
 
@@ -592,7 +637,7 @@ public class Peer implements Protocol {
 
 			chunkInfo = new ChunkInfo(storedMessage.getMessageFields().replicationDegree,
 					storedMessage.getMessageFields().chunkNo, storedMessage.getMessageFields().fileId,
-					storedMessage.getMessageFields().senderId, new int[] { storedMessage.getMessageFields().senderId });
+					-1, new int[] { storedMessage.getMessageFields().senderId });
 			chunkMap.put(chunkId, chunkInfo);
 
 		}
@@ -603,35 +648,33 @@ public class Peer implements Protocol {
 	}
 
 	
-	private void saveChunkToDisk(Message msg) {
+	private synchronized void saveChunkToDisk(Message msg) {
 
 		String chunkId = ChunkInfo.buildChunkId(msg.getMessageFields().chunkNo, msg.getMessageFields().fileId);
 
 		ChunkInfo chunkInfo = chunkMap.get(chunkId);
+		
+		byte[] chunkBytes = msg.getChunk();
 
 		long chunksFolderSize = Utils.calculateFolderSize(pathToPeerChunks);
 
-		System.out.println("Folder size: " + chunksFolderSize);
-
-		System.out.println("Chunk Size: " + msg.getChunk().length);
-
-		System.out.println("Sum: " + (chunksFolderSize + msg.getChunk().length));
-
-		Boolean save = true;
-
+		boolean save = true;
+		
+		boolean hasNoSpace =  (chunksFolderSize + (long) chunkBytes.length) > this.currentMaxChunkFolderSize;
+		
 		if (chunkInfo != null) {
 			if (chunkInfo.replicationDegree >= msg.getMessageFields().replicationDegree || chunkInfo.seeds
-					.contains(this.id) /*
-										 * || chunksFolderSize + msg.getChunk().length > this.currentMaxChunkFolderSize
-										 */)
+					.contains(this.id) || hasNoSpace )
 				save = false;
 		}
+		
+		else
+			save = !hasNoSpace;
 
 		registerMySavedChunk(msg, save);
 
+		
 		if (save) {
-
-			System.out.println(" ---- Saving Chunk -----");
 
 			try {
 				FileOutputStream stream = new FileOutputStream(this.pathToPeerChunks + "/"
@@ -644,9 +687,6 @@ public class Peer implements Protocol {
 			}
 
 		}
-
-		else
-			System.out.println("Not saving");
 
 	}
 
@@ -805,24 +845,42 @@ public class Peer implements Protocol {
 			updateSentChunk(chunkId, false);
 			return;
 		}
-
-		if (!chunk.seeds.contains(this.id)) {
-
+		
+		if(!chunk.seeds.contains(id)) {
+			
 			updateSentChunk(chunkId, false);
 			return;
+			
+		}
+		
+		
+		
+		Boolean alreadySent = Peer.this.sendingChunks.get(chunkId);
+
+		if(alreadySent != null) {
+				
+			if (alreadySent == true) {
+
+				updateSentChunk(chunkId, false);
+				return;
+			}
+			
 		}
 
 		updateSentChunk(chunkId, false);
 
-		ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
+		
 
 		int waitingTime = randomGenerator.nextInt(MAX_RANDOM_WAIT_TIME);
-
-		service.schedule(new Thread() {
+		
+		
+		
+		
+		class SendChunk implements Runnable {
 
 			@Override
 			public void run() {
-
+				
 				if (Peer.this.sendingChunks.get(chunkId) == true) {
 
 					updateSentChunk(chunkId, false);
@@ -844,10 +902,15 @@ public class Peer implements Protocol {
 					System.out.println(e.getLocalizedMessage());
 
 				}
-
+				
 			}
+			
+			
+			
+		}
+		
 
-		}, waitingTime, TimeUnit.MILLISECONDS);
+		service.schedule(new SendChunk(), waitingTime, TimeUnit.MILLISECONDS);
 
 	}
 
@@ -876,6 +939,15 @@ public class Peer implements Protocol {
 	public String restore(String fileName) {
 
 		String fileId = findBackedUpFileId(fileName);
+		
+		for(ChunkInfo chunkInfo : this.chunkMap.values()) {
+			
+			if(chunkInfo.replicationDegree < 1)
+				return "Could not restore file, file '" + fileName + "' is missing some chunks";
+			
+		}
+		
+		
 
 		if (fileId == null) {
 
@@ -899,7 +971,7 @@ public class Peer implements Protocol {
 				String chunkId = fileId + "-" + i;
 				requestChunk(chunkId);
 				try {
-					Thread.sleep(100);
+					Thread.sleep(PUT_CHUNK_DELAY);
 				} catch (InterruptedException e) {
 					// TODO Auto-generated catch block
 					e.printStackTrace();
@@ -914,9 +986,6 @@ public class Peer implements Protocol {
 		}
 			
 		
-		
-		
-
 		return "File '" + fileName + " successfully restored";
 
 	}
@@ -946,8 +1015,7 @@ public class Peer implements Protocol {
 			File chunkFile = new File(tempFolder + "/" + chunkId);
 
 			if (chunkFile.exists()) {
-				
-				System.out.println("Already have chunk");
+			
 				return;
 			}
 			
@@ -955,7 +1023,7 @@ public class Peer implements Protocol {
 
 			try {
 				FileOutputStream output = new FileOutputStream(chunkFile);
-
+				
 				output.write(message.getChunk());
 
 				output.close();
@@ -971,14 +1039,16 @@ public class Peer implements Protocol {
 
 			
 			File folder = new File(tempFolder);
+			
+			if(!folder.exists())
+				return;
+			
 			int numberOfSavedChunks = folder.listFiles().length;
 			
-			System.out.println("Saved Chunks: " + numberOfSavedChunks);
-			System.out.println("Total: " + numberOfChunks);
 
 			if (numberOfSavedChunks >= numberOfChunks) {
 
-				System.out.println("entrei no merge chunks");
+				System.out.println("File " + fileName + " restored");
 
 				Utils.mergeChunks(pathToPeerRestored + "/" + fileName, tempFolder, message.getMessageFields().fileId);
 
@@ -1028,20 +1098,46 @@ public class Peer implements Protocol {
 
 	
 	public void deleteFileFromDisk(String fileIdToDelete) {
+		
+		
 		File[] chunks = new File(this.pathToPeerChunks).listFiles();
 
 		if (chunks != null) {
+			
 			for (File chunk : chunks) {
 				String[] splitId = chunk.getName().split("-");
-				String chunkId = ChunkInfo.buildChunkId(Integer.parseInt(splitId[1]), splitId[0]);
-
 				if (splitId[0].equals(fileIdToDelete)) {
 					chunk.delete();
-					chunkMap.remove(chunkId);
-					fileMap.remove(fileIdToDelete);
+					
+					
 				}
 			}
 		}
+		
+		
+		ArrayList<String> chunksToDelete = new ArrayList<>();
+		
+		for(String chunkId : this.chunkMap.keySet()) {
+			
+			ChunkInfo chunkInfo = this.chunkMap.get(chunkId);
+			
+			if(chunkInfo.fileId.equals(fileIdToDelete)) {
+				
+				chunksToDelete.add(chunkId);
+				
+				
+			}
+				
+		}
+		
+		for(String chunkId : chunksToDelete) {
+			
+			chunkMap.remove(chunkId);
+			
+		}
+		
+		fileMap.remove(fileIdToDelete);
+		
 	}
 
 	
@@ -1052,10 +1148,20 @@ public class Peer implements Protocol {
 		ArrayList<ChunkInfo> selfInitBackupChunks = new ArrayList<ChunkInfo>();
 		ArrayList<ChunkInfo> storedChunks = new ArrayList<ChunkInfo>();
 
+		
+		for(String chunkId : chunkMap.keySet()) {
+			
+			String fileId = chunkId.split("-")[0];
+			
+			if(fileMap.containsKey(fileId))
+				selfInitBackupChunks.add(chunkMap.get(chunkId));
+			
+			
+		}
+		
+		
 		for (ChunkInfo chunkInfo : chunkMap.values()) {
 
-			if (chunkInfo.backupInitiatorPeer == this.id)
-				selfInitBackupChunks.add(chunkInfo);
 
 			if (chunkInfo.seeds.contains(this.id))
 				storedChunks.add(chunkInfo);
@@ -1147,7 +1253,7 @@ public class Peer implements Protocol {
 			storedSize += chunk.length();
 		}
 
-		out.println("\nPeer storage maximum capacity: " + MAX_STORAGE_SIZE + " KBytes");
+		out.println("\nPeer storage maximum capacity: " + MAX_STORAGE_SIZE_KB + " KBytes");
 		out.println("\nPeer used space (stored chunks size): " + storedSize / KBYTES + " KBytes");
 
 		out.close();
