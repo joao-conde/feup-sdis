@@ -1354,8 +1354,9 @@ public class Peer implements Protocol {
 
 		maximumDiskSpace *= KBYTES;
 
+		this.currentMaxChunkFolderSize = maximumDiskSpace;
+
 		if(maximumDiskSpace > this.currentMaxChunkFolderSize){
-			this.currentMaxChunkFolderSize = maximumDiskSpace;
 			return "Space available for storage increased";
 		}
 
@@ -1368,7 +1369,6 @@ public class Peer implements Protocol {
 		long chunksLength = Utils.calculateFolderSize(this.pathToPeerChunks);
 
 		if(maximumDiskSpace >= chunksLength){
-			this.currentMaxChunkFolderSize = maximumDiskSpace;
 			return "Space decreased but chunks still fit";
 		}
 
@@ -1388,12 +1388,12 @@ public class Peer implements Protocol {
 
 			spaceFreed += chunk.length();
 			sendRemoved(chunkID);
-			chunk.delete();			
+			chunk.delete();	
+			chunkMap.remove(chunkID);	
 		}
 
-		this.currentMaxChunkFolderSize = maximumDiskSpace;
 		
-		return "END " + spaceToFree + "|" + spaceFreed;
+		return "";
 	}
 
 
