@@ -47,9 +47,9 @@ public interface Protocol extends Remote {
 		
 	}
 	
-	//void receiveData(String fileName, int length, byte[] buffer) throws RemoteException;
     String backup(String filePath, int replicationDegree) throws RemoteException;
 	String delete(String fileName) throws RemoteException;
 	String showServiceState() throws RemoteException;
 	String restore(String fileName) throws RemoteException;
+	String reclaim(int maximumDiskSpace) throws RemoteException;
 }

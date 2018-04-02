@@ -115,9 +115,9 @@ public class Utils {
 		
 	}
 	
-	public static long calculateFolderSize(String folderName) {
+	public static long calculateFolderSize(String folderPath) {
 		
-		File folder = new File(folderName);
+		File folder = new File(folderPath); 
 		
 		if(!folder.isDirectory())
 			return -1;
@@ -133,9 +133,7 @@ public class Utils {
 			
 		}
 		
-		
 		return result;
-		
 	}
 	
 	
