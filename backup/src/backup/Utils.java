@@ -136,5 +136,16 @@ public class Utils {
 		return result;
 	}
 	
+	public static  void printUsage() {
+		
+		System.out.println("Usage: ");
+		System.out.println("<protocol_version:float> <server_id:int> <service access point:String>\n"
+				+ "<Control Channel Address:Multicast IP Address> <Control Channel Port: Port>\n" +
+				"<Data Backup Channel Address:Multicast IP Address> <Data Backup Channel Port: Port>\n" +
+				"<Data Recover Channel Address:Multicast IP Address> <Data Recover Channel Port: Port>\n");
+				
+		
+	}
+	
 	
 }

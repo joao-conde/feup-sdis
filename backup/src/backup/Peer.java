@@ -40,7 +40,6 @@ import backup.Message.ReplicationDegreeOutOfLimitsException;
 
 public class Peer implements Protocol {
 
-	public static float BACKUP_PROTOCOL_VERSION = 1.0f;
 	public final static int CHUNK_MAX_SIZE = 64000;
 	public final static int MESSAGE_MAX_SIZE = CHUNK_MAX_SIZE + 100;
 	public final static int MAX_RANDOM_WAIT_TIME = 400;
@@ -50,12 +49,15 @@ public class Peer implements Protocol {
 	public final static int MAX_STORAGE_SIZE_KB = 2000;
 	public final static String HASH_ALGORITHM = "SHA-256";
 	public final static char SEPARATOR = ' ';
-	public final static String STATE_FILE_NAME = "state";
 	public final static int PUT_CHUNK_DELAY = 20;
+	public final static int MAX_NUMBER_SENT_DELETES = 5;
 
+	public final static String STATE_FILE_NAME = "state";
 	public final static String STATE_FILES_FILE_NAME = "backedUpFiles";
+	public final static String DELETE_FILES_FILE_NAME = "deletedFiles";
 
 	public int id;
+	private float protocol_version;
 	private Connection connection;
 	private Dispatcher mcDispatcher;
 	private Dispatcher mdbDispatcher;
@@ -73,6 +75,8 @@ public class Peer implements Protocol {
 	private HashMap<String, Boolean> receivingChunks = new HashMap<>();
 
 	private HashMap<String, String[]> fileMap = new HashMap<>();
+	
+	private HashSet<String> deletedFiles = new HashSet<>();
 	
 	private ExecutorService threadPool = Executors.newFixedThreadPool(100);
 	private ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
@@ -156,7 +160,7 @@ public class Peer implements Protocol {
 			try {
 
 				this.message = Message.processMessage(this.buffer);
-
+				
 				if (id == this.message.getMessageFields().senderId)
 					return;
 
@@ -195,7 +199,10 @@ public class Peer implements Protocol {
 
 				case GETCHUNK:
 
-					sendChunk(this.message);
+					
+					if(message.getMessageFields().protocolVersion == 2.0)
+	
+						sendChunk(this.message);
 					
 					
 					
@@ -239,6 +246,12 @@ public class Peer implements Protocol {
 					updateReplicationDegree(this.message);
 
 					break;
+					
+				case NEWPEER:
+					
+					resendDeletes();
+					
+					break;
 
 				default:
 					break;
@@ -252,6 +265,13 @@ public class Peer implements Protocol {
 
 		}
 
+	}
+	
+	private void resendDeletes() {
+				
+		for(String fileId : this.deletedFiles)
+			this.sendDelete(fileId);
+		
 	}
 	
 
@@ -283,8 +303,7 @@ public class Peer implements Protocol {
 
 				}
 
-				Runnable handler = new MessageHandler(buffer, this.multicastChannel);
-								
+				Runnable handler = new MessageHandler(buffer, this.multicastChannel);				
 				threadPool.execute(handler);
 
 			}
@@ -306,10 +325,7 @@ public class Peer implements Protocol {
 				if(stateFile.exists())
 					stateFile.delete();
 				
-				
-				
 				PrintWriter pw = new PrintWriter(stateFile);
-				
 				
 				for(String chunkId: Peer.this.chunkMap.keySet()) {
 					
@@ -360,6 +376,20 @@ public class Peer implements Protocol {
 				}
 
 				pwf.close();
+				
+				
+				File deleteFilesFile = new File(Peer.this.pathToPeer + "/" + Peer.DELETE_FILES_FILE_NAME);
+				
+				if(deleteFilesFile.exists())
+					deleteFilesFile.delete();
+				
+				PrintWriter pwd = new PrintWriter(deleteFilesFile);
+				
+				for (String fileId : deletedFiles) {
+					pwd.write(fileId);
+				}
+				
+				pwd.close();
 
 				Peer.this.registry.unbind(Protocol.PROTOCOL + "-" + Peer.this.id);
 
@@ -369,13 +399,23 @@ public class Peer implements Protocol {
 		}
 
 	}
+	
+	
 
 	
 	public static void main(String[] args) {
 
 		System.setProperty("java.net.preferIPv4Stack", "true");
-
-		Peer peer = new Peer(Integer.parseInt(args[0]));
+		
+		if(args.length != 9) {
+			
+			Utils.printUsage();
+			return;
+			
+		}
+		
+	
+		Peer peer = new Peer(args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7],args[8]);
 
 		System.out.println("------ Peer " + args[0] + " INITIATED -------");
 
@@ -384,11 +424,14 @@ public class Peer implements Protocol {
 	}
 
 	
-	public Peer(int id) {
+	public Peer(String protocolVersion, String id, String rmiAccessPoint, String mcAddress, String mcPort, String mdbAddress, String mdbPort,
+			String mdrAddress, String mdrPort) {
 		
-		this.id = id;
-
-		connection = new Connection("224.0.0.1", 2300, "224.0.0.2", 2301, "224.0.0.3", 2302);
+		this.protocol_version = Float.parseFloat(protocolVersion);
+		this.id = Integer.parseInt(id);
+		
+	
+		connection = new Connection(mcAddress, Integer.parseInt(mcPort), mdbAddress, Integer.parseInt(mdbPort), mdrAddress, Integer.parseInt(mdrPort));
 		mcDispatcher = new Dispatcher(connection.getMC());
 		mdbDispatcher = new Dispatcher(connection.getMDB());
 		mdrDispatcher = new Dispatcher(connection.getMDR());
@@ -411,7 +454,11 @@ public class Peer implements Protocol {
 		new File(this.pathToPeerRestored).mkdir();
 		new File(this.pathToPeerTemp).mkdir();
 
+		this.connection.getMC().sendMessage(Message.buildNewPeerMessage(this.id, this.protocol_version));
+		
 		this.loadChunksTable();
+		
+		
 		
 
 		try {
@@ -427,7 +474,7 @@ public class Peer implements Protocol {
 
 			registry = LocateRegistry.getRegistry();
 			Protocol stub = (Protocol) UnicastRemoteObject.exportObject(this, 0);
-			registry.bind(Protocol.PROTOCOL + "-" + id, stub);
+			registry.bind(rmiAccessPoint, stub);
 
 		} catch (AlreadyBoundException | RemoteException e) {
 		}
@@ -446,7 +493,7 @@ public class Peer implements Protocol {
 			return;
 
 		try {
-			Message reply = Message.buildMessage(new MessageFields(MessageType.STORED, BACKUP_PROTOCOL_VERSION, id,
+			Message reply = Message.buildMessage(new MessageFields(MessageType.STORED, this.protocol_version, id,
 					putChunkMessage.getMessageFields().fileId, putChunkMessage.getMessageFields().chunkNo));
 			Peer.this.connection.getMC().sendMessage(reply);
 		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
@@ -461,8 +508,13 @@ public class Peer implements Protocol {
 
 		try {
 			Message deleteMsg = Message
-					.buildMessage(new MessageFields(MessageType.DELETE, BACKUP_PROTOCOL_VERSION, this.id, fileId));
+					.buildMessage(new MessageFields(MessageType.DELETE, this.protocol_version, this.id, fileId));
 			Peer.this.connection.getMC().sendMessage(deleteMsg);
+			
+			deletedFiles.add(fileId);
+				
+			
+			
 		} catch (ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
 			System.out.println(e.getLocalizedMessage());
 
@@ -476,13 +528,12 @@ public class Peer implements Protocol {
 
 		try {
 			Message removedMsg = Message
-					.buildMessage(new MessageFields(MessageType.REMOVED, BACKUP_PROTOCOL_VERSION, this.id, 
+					.buildMessage(new MessageFields(MessageType.REMOVED, this.protocol_version, this.id, 
 							args[0], Integer.parseInt(args[1])));
 
 
 			Peer.this.connection.getMC().sendMessage(removedMsg);
 		} catch (NumberFormatException | ReplicationDegreeOutOfLimitsException | ChunkNoException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 	}
@@ -528,7 +579,7 @@ public class Peer implements Protocol {
 
 				try {
 					this.message = Message.buildMessage(new Message.MessageFields(MessageType.PUTCHUNK,
-							BACKUP_PROTOCOL_VERSION, Peer.this.id, fileId, chunkNo, desiredReplicationDegree), chunk);
+							Peer.this.protocol_version, Peer.this.id, fileId, chunkNo, desiredReplicationDegree), chunk);
 
 					
 					while(true) {
@@ -798,6 +849,25 @@ public class Peer implements Protocol {
 				lineScanner.close();
 
 			}
+			
+			
+			scanner = new Scanner(new File(Peer.this.pathToPeer + "/" + DELETE_FILES_FILE_NAME));
+			
+			while (scanner.hasNextLine()) {
+
+				String line = scanner.nextLine();
+
+				Scanner lineScanner = new Scanner(new InputStreamReader(new ByteArrayInputStream(line.getBytes())));
+
+				String fileId = lineScanner.next();
+				
+				deletedFiles.add(fileId);
+
+				lineScanner.close();
+
+			}
+			
+			
 
 			scanner.close();
 		} catch (FileNotFoundException e) {}
@@ -811,7 +881,7 @@ public class Peer implements Protocol {
 
 		try {
 
-			Message message = Message.buildMessage(new MessageFields(MessageType.GETCHUNK, BACKUP_PROTOCOL_VERSION, id,
+			Message message = Message.buildMessage(new MessageFields(MessageType.GETCHUNK, this.protocol_version, id,
 					chunkInfo.fileId, ChunkInfo.getChunkNo(chunkId)));
 
 			this.connection.getMC().sendMessage(message);
@@ -901,7 +971,7 @@ public class Peer implements Protocol {
 				try {
 
 					Message chunkMessage = Message
-							.buildMessage(new MessageFields(MessageType.CHUNK, BACKUP_PROTOCOL_VERSION, Peer.this.id,
+							.buildMessage(new MessageFields(MessageType.CHUNK, Peer.this.protocol_version, Peer.this.id,
 									chunk.fileId, getChunkMessage.getMessageFields().chunkNo), chunkBuffer);
 					Peer.this.connection.getMDR().sendMessage(chunkMessage);
 

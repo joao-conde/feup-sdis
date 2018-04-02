@@ -26,9 +26,10 @@ public class Message {
 		GETCHUNK("GETCHUNK"),
 		CHUNK("CHUNK"),
 		DELETE("DELETE"),
-		REMOVED("REMOVED");
+		REMOVED("REMOVED"),
+		NEWPEER("NEWPEER");
 		
-		static final ArrayList<String> types = new ArrayList<String>(Arrays.asList("PUTCHUNK","STORED","GETCHUNK","CHUNK","DELETE","REMOVED")) ;
+		static final ArrayList<String> types = new ArrayList<String>(Arrays.asList("PUTCHUNK","STORED","GETCHUNK","CHUNK","DELETE","REMOVED","NEWPEER")) ;
 		
 		public String text;
 		
@@ -52,6 +53,8 @@ public class Message {
 					return MessageType.DELETE;
 				case 5:
 					return MessageType.REMOVED;
+				case 6:
+					return MessageType.NEWPEER;
 				default:
 					throw new IllegalArgumentException(text);
 			
@@ -118,12 +121,19 @@ public class Message {
 			this.chunkNo = -1;
 			this.replicationDegree = -1;
 		}
+		
+		public MessageFields(int senderId) {
+			this.messageType = MessageType.NEWPEER;
+			this.senderId = senderId;
+		}
 
 	}
 
 
 	
-	
+	private Message(int senderId) {
+		this.messageFields = new MessageFields(senderId);
+	}
 
 	private Message(MessageFields messageFields, byte[] chunk) {
 		this.messageFields = messageFields;
@@ -190,6 +200,19 @@ public class Message {
 		return buildMessage(messageFields,null);
 				
 	}
+	
+	public static Message buildNewPeerMessage(int senderId, float protocolVersion) {
+		
+		Message result = new Message(senderId);
+		
+		result.headerString = result.getMessageFields().messageType.text + " " + protocolVersion + " " + senderId + " " + CRLF + CRLF;
+		
+		result.message = result.headerString.getBytes();
+		
+		return result;
+		
+		
+	}
 
 	public static Message processMessage(byte[] message) throws NumberFormatException {
 
@@ -217,11 +240,21 @@ public class Message {
 		
 		
 		MessageType messageType = MessageType.type(fields.get(0));
+		
 		float protocolVersion = Float.parseFloat(fields.get(1));
 		int senderId = Integer.parseInt(fields.get(2));
+		
+		if(messageType == MessageType.NEWPEER) {
+			
+			result.messageFields = new MessageFields(senderId);
+			return result;
+		}
+			
+		
 		String fileId = fields.get(3);
 		int chunkNo = -1;
 		int replicationDegree = -1;
+		
 		
 		if(messageType != MessageType.DELETE) {
 			chunkNo = Integer.parseInt(fields.get(4));
