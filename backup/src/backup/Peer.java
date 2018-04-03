@@ -46,7 +46,7 @@ public class Peer implements Protocol {
 	public final static int PUT_CHUNK_MAX_TIMES = 5;
 	public final static int INITIAL_PUT_CHUNK_WAIT_TIME = 1000;
 	public final static int KBYTES = 1000;
-	public final static int MAX_STORAGE_SIZE_KB = 2000;
+	public final static int MAX_STORAGE_SIZE_KB = 200000;
 	public final static String HASH_ALGORITHM = "SHA-256";
 	public final static char SEPARATOR = ' ';
 	public final static int PUT_CHUNK_DELAY = 20;
@@ -78,7 +78,7 @@ public class Peer implements Protocol {
 	
 	private HashSet<String> deletedFiles = new HashSet<>();
 	
-	private ExecutorService threadPool = Executors.newFixedThreadPool(100);
+	private ExecutorService threadPool = Executors.newFixedThreadPool(200);
 	private ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
 
 	private Registry registry;
@@ -940,7 +940,7 @@ public class Peer implements Protocol {
 				
 			if (alreadySent == true) {
 
-				updateSentChunk(chunkId, false);
+				//updateSentChunk(chunkId, false);
 				return;
 			}
 			
@@ -962,7 +962,6 @@ public class Peer implements Protocol {
 				
 				if (Peer.this.sendingChunks.get(chunkId) == true) {
 
-					updateSentChunk(chunkId, false);
 					return;
 				}
 
@@ -1052,7 +1051,6 @@ public class Peer implements Protocol {
 				try {
 					Thread.sleep(PUT_CHUNK_DELAY);
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 				
