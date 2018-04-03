@@ -122,17 +122,18 @@ public class Message {
 			this.replicationDegree = -1;
 		}
 		
-		public MessageFields(int senderId) {
+		public MessageFields(int senderId, float protocolVersion) {
 			this.messageType = MessageType.NEWPEER;
 			this.senderId = senderId;
+			this.protocolVersion = protocolVersion;
 		}
 
 	}
 
 
 	
-	private Message(int senderId) {
-		this.messageFields = new MessageFields(senderId);
+	private Message(int senderId, float protocolVersion) {
+		this.messageFields = new MessageFields(senderId, protocolVersion);
 	}
 
 	private Message(MessageFields messageFields, byte[] chunk) {
@@ -203,7 +204,7 @@ public class Message {
 	
 	public static Message buildNewPeerMessage(int senderId, float protocolVersion) {
 		
-		Message result = new Message(senderId);
+		Message result = new Message(senderId, protocolVersion);
 		
 		result.headerString = result.getMessageFields().messageType.text + " " + protocolVersion + " " + senderId + " " + CRLF + CRLF;
 		
@@ -246,7 +247,7 @@ public class Message {
 		
 		if(messageType == MessageType.NEWPEER) {
 			
-			result.messageFields = new MessageFields(senderId);
+			result.messageFields = new MessageFields(senderId, protocolVersion);
 			return result;
 		}
 			

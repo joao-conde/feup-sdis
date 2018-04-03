@@ -247,7 +247,7 @@ public class Peer implements Protocol {
 					break;
 					
 				case NEWPEER:
-					
+										
 					if(message.getMessageFields().protocolVersion == 2.0)
 					
 						resendDeletes();
