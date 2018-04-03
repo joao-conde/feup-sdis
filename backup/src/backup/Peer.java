@@ -1327,7 +1327,7 @@ public class Peer implements Protocol {
 			storedSize += chunk.length();
 		}
 
-		out.println("\nPeer storage maximum capacity: " + MAX_STORAGE_SIZE_KB + " KBytes");
+		out.println("\nPeer storage maximum capacity: " + this.currentMaxChunkFolderSize / KBYTES + " KBytes");
 		out.println("\nPeer used space (stored chunks size): " + storedSize / KBYTES + " KBytes");
 		out.close();
 		return outBuffer.toString();
@@ -1352,9 +1352,8 @@ public class Peer implements Protocol {
 
 		maximumDiskSpace *= KBYTES;
 
-		this.currentMaxChunkFolderSize = maximumDiskSpace;
-
 		if(maximumDiskSpace > this.currentMaxChunkFolderSize){
+			this.currentMaxChunkFolderSize = maximumDiskSpace;
 			return "Space available for storage increased";
 		}
 
@@ -1367,6 +1366,7 @@ public class Peer implements Protocol {
 		long chunksLength = Utils.calculateFolderSize(this.pathToPeerChunks);
 
 		if(maximumDiskSpace >= chunksLength){
+			this.currentMaxChunkFolderSize = maximumDiskSpace;
 			return "Space decreased but chunks still fit";
 		}
 
@@ -1379,19 +1379,21 @@ public class Peer implements Protocol {
 		while(spaceFreed < spaceToFree){
 			String chunkID = getBiggestChunk();
 
-			if(chunkID.equals(""))
+			if(chunkID.equals("")){
+				this.currentMaxChunkFolderSize = maximumDiskSpace;
 				return "No more chunks to remove";
+			}
 
 			File chunk = new File(this.pathToPeerChunks + '/' + chunkID);
 
 			spaceFreed += chunk.length();
 			sendRemoved(chunkID);
-			chunk.delete();	
-			chunkMap.remove(chunkID);	
+			chunk.delete();			
 		}
 
+		this.currentMaxChunkFolderSize = maximumDiskSpace;
 		
-		return "";
+		return "Space free'd: " + spaceFreed;
 	}
 
 
