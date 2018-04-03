@@ -200,9 +200,7 @@ public class Peer implements Protocol {
 				case GETCHUNK:
 
 					
-					if(message.getMessageFields().protocolVersion == 2.0)
-	
-						sendChunk(this.message);
+					sendChunk(this.message);
 					
 					
 					
@@ -249,7 +247,9 @@ public class Peer implements Protocol {
 					
 				case NEWPEER:
 					
-					resendDeletes();
+					if(message.getMessageFields().protocolVersion == 2.0)
+					
+						resendDeletes();
 					
 					break;
 
