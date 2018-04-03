@@ -21,6 +21,7 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -71,10 +72,10 @@ public class Peer implements Protocol {
 	private String pathToPeerTemp;
 	private CloseResources closeResources = new CloseResources();
 
-	private HashMap<String, Boolean> sendingChunks = new HashMap<>();
-	private HashMap<String, Boolean> receivingChunks = new HashMap<>();
+	private ConcurrentHashMap<String, Boolean> sendingChunks = new ConcurrentHashMap<>();
+	private ConcurrentHashMap<String, Boolean> receivingChunks = new ConcurrentHashMap<>();
 
-	private HashMap<String, String[]> fileMap = new HashMap<>();
+	private ConcurrentHashMap<String, String[]> fileMap = new ConcurrentHashMap<>();
 	
 	private HashSet<String> deletedFiles = new HashSet<>();
 	
@@ -1352,8 +1353,9 @@ public class Peer implements Protocol {
 
 		maximumDiskSpace *= KBYTES;
 
+		this.currentMaxChunkFolderSize = maximumDiskSpace;
+
 		if(maximumDiskSpace > this.currentMaxChunkFolderSize){
-			this.currentMaxChunkFolderSize = maximumDiskSpace;
 			return "Space available for storage increased";
 		}
 
@@ -1366,7 +1368,6 @@ public class Peer implements Protocol {
 		long chunksLength = Utils.calculateFolderSize(this.pathToPeerChunks);
 
 		if(maximumDiskSpace >= chunksLength){
-			this.currentMaxChunkFolderSize = maximumDiskSpace;
 			return "Space decreased but chunks still fit";
 		}
 
@@ -1386,13 +1387,12 @@ public class Peer implements Protocol {
 
 			spaceFreed += chunk.length();
 			sendRemoved(chunkID);
-			chunk.delete();
-			chunkMap.remove(chunkID);		
+			chunk.delete();	
+			chunkMap.remove(chunkID);	
 		}
 
-		this.currentMaxChunkFolderSize = maximumDiskSpace;
 		
-		return "Reclaim successful";
+		return "";
 	}
 
 
