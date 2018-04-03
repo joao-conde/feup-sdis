@@ -1128,7 +1128,7 @@ public class Peer implements Protocol {
 
 				System.out.println("File " + fileName + " restored");
 
-				Utils.mergeChunks(pathToPeerRestored + "/" + fileName, tempFolder, message.getMessageFields().fileId);
+				Utils.mergeChunks(pathToPeerRestored + "/" + fileName + Thread.currentThread().getId(), tempFolder, message.getMessageFields().fileId);
 
 			}
 			
