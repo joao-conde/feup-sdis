@@ -1,13 +1,13 @@
-#SDIS FILE BACKUP DISTRIBUTED SYSTEM
+# SDIS FILE BACKUP DISTRIBUTED SYSTEM
 
-#Running Peer
+# Running Peer
 
 * In the main folder execute sh run.sh <protocol_version> <peer_id> <peer_access_point>
 
 
-#Running Test Client
+# Running Test Client
 
-*In the bin folder*
+* In the bin folder *
 
 ### Backup a file
 
