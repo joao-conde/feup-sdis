@@ -98,12 +98,12 @@ public class Utils {
 				in.read(chunkBuffer);
 				out.write(chunkBuffer);
 				
-				chunk.delete();
+				//chunk.delete();
 
 				chunk = new File(chunksFolder + '/' + fileId + '-' + chunkNo++);
 			}
 			
-			new File(chunksFolder).delete();
+			//new File(chunksFolder).delete();
 
 
 			out.close();
