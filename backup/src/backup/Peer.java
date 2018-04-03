@@ -941,16 +941,6 @@ public class Peer implements Protocol {
 				
 			if (alreadySent == true) {
 
-				this.service.schedule(new Runnable() {
-					
-					@Override
-					public void run() {
-						updateSentChunk(chunkId, false);
-						
-					}
-				}, 1, TimeUnit.SECONDS);
-				
-				
 				return;
 			}
 			
