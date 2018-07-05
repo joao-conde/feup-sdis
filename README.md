@@ -2,7 +2,7 @@
 
 # Compile
 
-* run sh compile.sh
+* run sh compile.sh 
 
 After compilation folders bin and res are created as well as files state file, chunk states file and deleted files file to keep track of peer state.
 
